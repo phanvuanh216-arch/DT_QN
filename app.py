@@ -115,7 +115,7 @@ with st.sidebar:
 
 # ─── Nội dung chính ────────────────────────────────────────────────────────────
 if menu == "🏠 Tổng quan":
-    st.title("🌾 Hệ thống Bản tin Khí hậu Nông nghiệp Quảng Ninh")
+    st.title("🌾 Công cụ quản lý rủi ro khí hậu đối với cây trồng và vật nuôi trên địa bàn tỉnh Quảng Ninh")
     st.markdown("""
     Hệ thống hỗ trợ tạo **bản tin cảnh báo khí hậu** cho các xã tại Quảng Ninh,
     bao gồm đánh giá rủi ro cho **Lúa, Rau, Lợn, Gà** theo từng kỳ tháng.
