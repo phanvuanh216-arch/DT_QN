@@ -25,18 +25,19 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ─── Tải và xử lý logo (xóa nền trắng) ──────────────────────────────────────
+# ─── Tải và xử lý logo (xóa nền trắng nhẹ – giữ nguyên màu logo) ────────────
 @st.cache_data
 def load_logo_base64():
-    """Tải logo từ GitHub và xóa nền trắng, trả về base64 PNG."""
+    """Tải logo từ GitHub, xóa nền trắng thuần (>= 248 cả 3 kênh), trả về base64 PNG."""
     try:
         url = "https://raw.githubusercontent.com/phanvuanh216-arch/DT_QN/main/logo_vien.jpg"
         resp = requests.get(url, timeout=10)
         img = Image.open(BytesIO(resp.content)).convert("RGBA")
-        data = np.array(img)
-        # Xóa nền trắng/sáng: pixel nào R,G,B đều > 230 → alpha = 0
+        data = np.array(img, dtype=np.uint8)
         r, g, b, a = data[:, :, 0], data[:, :, 1], data[:, :, 2], data[:, :, 3]
-        white_mask = (r > 230) & (g > 230) & (b > 230)
+        # Chỉ xóa pixel trắng/gần trắng thuần: R,G,B đều >= 248
+        # Ngưỡng cao để không làm mờ các phần màu của logo
+        white_mask = (r >= 248) & (g >= 248) & (b >= 248)
         data[white_mask, 3] = 0
         result = Image.fromarray(data, "RGBA")
         buf = BytesIO()
@@ -47,56 +48,74 @@ def load_logo_base64():
 
 logo_b64 = load_logo_base64()
 logo_html = (
-    f'<img src="data:image/png;base64,{logo_b64}" style="height:72px;width:auto;object-fit:contain;" />'
+    f'<img src="data:image/png;base64,{logo_b64}" style="height:86px;width:auto;object-fit:contain;filter:drop-shadow(0 1px 3px rgba(0,0,0,0.4));" />'
     if logo_b64
-    else '<div style="width:72px;height:72px;background:rgba(255,255,255,0.15);border-radius:8px;"></div>'
+    else '<div style="width:86px;height:86px;background:rgba(255,255,255,0.15);border-radius:8px;"></div>'
 )
 
 # ─── CSS tùy chỉnh ────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-    /* ── Header cố định toàn cục ─────────────────────────────── */
+    /* ── Ẩn padding mặc định Streamlit để header full-width ──── */
+    .block-container {
+        padding-top: 0 !important;
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+    }
+    /* Ẩn khoảng trắng trên cùng (toolbar Streamlit) */
+    header[data-testid="stHeader"] {
+        background: transparent !important;
+        height: 0 !important;
+        min-height: 0 !important;
+    }
+    #MainMenu, footer { visibility: hidden; }
+
+    /* ── Header cố định toàn cục – full width ────────────────── */
     .site-header {
         background: linear-gradient(135deg, #1a6b3a 0%, #0f4d2a 60%, #0a3d1f 100%);
         border-bottom: 4px solid #f5a623;
-        padding: 0 32px;
+        padding: 14px 40px;
         display: flex;
         align-items: center;
-        gap: 20px;
-        min-height: 88px;
-        margin: -1rem -1rem 1.5rem -1rem;
-        box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+        justify-content: center;
+        gap: 24px;
+        min-height: 106px;
+        /* kéo ra ngoài padding của block-container */
+        margin: 0 -1rem 1.5rem -1rem;
+        box-shadow: 0 4px 18px rgba(0,0,0,0.4);
     }
     .site-header .logo-wrap {
         flex-shrink: 0;
         display: flex;
         align-items: center;
         justify-content: center;
-        background: rgba(255,255,255,0.08);
-        border-radius: 10px;
-        padding: 6px 10px;
+        background: rgba(255,255,255,0.10);
+        border-radius: 12px;
+        padding: 8px 12px;
     }
     .site-header .text-wrap {
         flex: 1;
         display: flex;
         flex-direction: column;
+        align-items: center;   /* căn giữa chữ */
         justify-content: center;
-        gap: 4px;
+        gap: 6px;
+        text-align: center;
     }
     .site-header .line1 {
         color: #d4f0e0;
-        font-size: 0.88rem;
-        font-weight: 500;
-        letter-spacing: 0.04em;
+        font-size: 0.95rem;
+        font-weight: 600;
+        letter-spacing: 0.05em;
         text-transform: uppercase;
         line-height: 1.3;
     }
     .site-header .line2 {
         color: #f5e642;
-        font-size: 1.25rem;
+        font-size: 1.35rem;
         font-weight: 800;
-        line-height: 1.25;
-        text-shadow: 0 1px 4px rgba(0,0,0,0.4);
+        line-height: 1.3;
+        text-shadow: 0 1px 5px rgba(0,0,0,0.45);
     }
 
     /* ── Các style gốc giữ nguyên ───────────────────────────── */
@@ -184,9 +203,9 @@ with st.sidebar:
 # ─── Nội dung chính ────────────────────────────────────────────────────────────
 if menu == "🏠 Tổng quan":
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("🏘️ Số xã", "30")
+    col1.metric("🏘️ Số xã", "28")
     col2.metric("🌱 Đối tượng nông nghiệp", "4")
-    col3.metric("📅 Kỳ dự báo", "3 tháng")
+    col3.metric("📅 Kỳ dự báo", "Từ 1 - 3 tháng")
     col4.metric("📄 Bản tin đã tạo", "0")
 
     st.markdown("---")
