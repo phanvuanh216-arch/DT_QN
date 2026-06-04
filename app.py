@@ -166,17 +166,9 @@ st.markdown(f"""
         backdrop-filter: blur(4px);
     }}
 
-    /* ── Ẩn thanh tiêu đề MODULE trong các module ───────────── */
-    .module-header { display: none !important; }
-    /* Ẩn đoạn mô tả ngay sau .module-header (dòng st.markdown text) */
-    .module-header + div { display: none !important; }
-
-    /* ── Ẩn thanh tiêu đề MODULE trong các module ──────────── */
-    /* .module-header là class của thanh xanh đen "MODULE: ..." */
+    /* ── Ẩn thanh MODULE header + dòng mô tả bên dưới ─────── */
     .module-header {{ display: none !important; }}
-    /* Ẩn đoạn text mô tả nằm ngay bên dưới .module-header */
-    .module-header + div,
-    .module-header ~ div:first-of-type {{ display: none !important; }}
+    .module-header + div {{ display: none !important; }}
 
     /* ── Các style gốc giữ nguyên ───────────────────────────── */
     .module-header {{
@@ -293,9 +285,9 @@ with st.sidebar:
 # ─── Nội dung chính ────────────────────────────────────────────────────────────
 if menu == "🏠 Tổng quan":
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("🏘️ Số xã", "28")
+    col1.metric("🏘️ Số xã", "30")
     col2.metric("🌱 Đối tượng nông nghiệp", "4")
-    col3.metric("📅 Kỳ dự báo", "Từ 1 - 3 tháng")
+    col3.metric("📅 Kỳ dự báo", "3 tháng")
     col4.metric("📄 Bản tin đã tạo", "0")
 
     st.markdown("---")
