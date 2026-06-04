@@ -107,8 +107,8 @@ with st.sidebar:
     )
 
     st.markdown("---")
-    st.markdown("**Nguồn dữ liệu:**")
-    st.markdown("http://222.254.32.10/forecast/Detai_QuangNinh/")
+    st.markdown("Đơn vị phát triển: Phòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu")
+    st.markdown("Viện Khoa học Khí tượng Thủy văn Môi trường và Biển")
     st.markdown("---")
     st.markdown("*Phiên bản 1.0 – 06/2026*")
 
