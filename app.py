@@ -7,7 +7,7 @@ import streamlit as st
 import base64
 import requests
 from io import BytesIO
-from PIL import Image
+from PIL import Image, ImageFilter, ImageEnhance
 import numpy as np
 from modules import (
     du_bao_tu_dong,
@@ -25,53 +25,90 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ─── Tải và xử lý logo (xóa nền trắng nhẹ – giữ nguyên màu logo) ────────────
+# ─── Tải logo (giữ nguyên nền trắng) ─────────────────────────────────────────
 @st.cache_data
 def load_logo_base64():
-    """Tải logo từ GitHub, xóa nền trắng thuần (>= 248 cả 3 kênh), trả về base64 PNG."""
     try:
         url = "https://raw.githubusercontent.com/phanvuanh216-arch/DT_QN/main/logo_vien.jpg"
         resp = requests.get(url, timeout=10)
-        img = Image.open(BytesIO(resp.content)).convert("RGBA")
-        data = np.array(img, dtype=np.uint8)
-        r, g, b, a = data[:, :, 0], data[:, :, 1], data[:, :, 2], data[:, :, 3]
-        # Chỉ xóa pixel trắng/gần trắng thuần: R,G,B đều >= 248
-        # Ngưỡng cao để không làm mờ các phần màu của logo
-        white_mask = (r >= 248) & (g >= 248) & (b >= 248)
-        data[white_mask, 3] = 0
-        result = Image.fromarray(data, "RGBA")
+        return base64.b64encode(resp.content).decode()
+    except Exception:
+        return None
+
+# ─── Tải ảnh nền Quảng Ninh, làm mờ + tint xanh nhẹ ────────────────────────
+@st.cache_data
+def load_bg_base64():
+    try:
+        url = "https://raw.githubusercontent.com/phanvuanh216-arch/DT_QN/main/anh_dep_quang_ninh_giao_dien_1.jpg"
+        resp = requests.get(url, timeout=15)
+        img = Image.open(BytesIO(resp.content)).convert("RGB")
+        # Resize để tăng tốc
+        w, h = img.size
+        img = img.resize((min(w, 1600), min(h, 900)), Image.LANCZOS)
+        # Làm mờ Gaussian mạnh
+        img = img.filter(ImageFilter.GaussianBlur(radius=14))
+        # Giảm sáng xuống 55%
+        img = ImageEnhance.Brightness(img).enhance(0.55)
+        # Tint xanh lá nhẹ để hoà với giao diện
+        overlay = Image.new("RGB", img.size, (8, 52, 25))
+        img = Image.blend(img, overlay, alpha=0.28)
         buf = BytesIO()
-        result.save(buf, format="PNG")
+        img.save(buf, format="JPEG", quality=85)
         return base64.b64encode(buf.getvalue()).decode()
     except Exception:
         return None
 
 logo_b64 = load_logo_base64()
+bg_b64   = load_bg_base64()
+
 logo_html = (
-    f'<img src="data:image/png;base64,{logo_b64}" style="height:86px;width:auto;object-fit:contain;filter:drop-shadow(0 1px 3px rgba(0,0,0,0.4));" />'
+    f'<img src="data:image/jpeg;base64,{logo_b64}" '
+    f'style="height:86px;width:auto;object-fit:contain;border-radius:6px;background:#fff;padding:4px;" />'
     if logo_b64
-    else '<div style="width:86px;height:86px;background:rgba(255,255,255,0.15);border-radius:8px;"></div>'
+    else '<div style="width:86px;height:86px;background:#fff;border-radius:6px;"></div>'
+)
+
+bg_css = (
+    f'background-image: url("data:image/jpeg;base64,{bg_b64}"); '
+    f'background-size: cover; background-position: center top; background-attachment: fixed;'
+    if bg_b64
+    else 'background-color: #0d3320;'
 )
 
 # ─── CSS tùy chỉnh ────────────────────────────────────────────────────────────
-st.markdown("""
+st.markdown(f"""
 <style>
-    /* ── Ẩn padding mặc định Streamlit để header full-width ──── */
-    .block-container {
+    /* ── Ẩn chrome mặc định Streamlit ───────────────────────── */
+    .block-container {{
         padding-top: 0 !important;
         padding-left: 1rem !important;
         padding-right: 1rem !important;
-    }
-    /* Ẩn khoảng trắng trên cùng (toolbar Streamlit) */
-    header[data-testid="stHeader"] {
+    }}
+    header[data-testid="stHeader"] {{
         background: transparent !important;
         height: 0 !important;
         min-height: 0 !important;
-    }
-    #MainMenu, footer { visibility: hidden; }
+    }}
+    #MainMenu, footer {{ visibility: hidden; }}
+
+    /* ── Ảnh nền toàn trang (vùng content) ──────────────────── */
+    .stAppViewContainer > .main {{
+        {bg_css}
+    }}
+    /* Lớp phủ mờ nhẹ để text dễ đọc */
+    .stAppViewContainer > .main::before {{
+        content: "";
+        position: fixed;
+        inset: 0;
+        background: rgba(5, 30, 15, 0.18);
+        pointer-events: none;
+        z-index: 0;
+    }}
+    /* Đảm bảo nội dung nằm trên lớp phủ */
+    .block-container {{ position: relative; z-index: 1; }}
 
     /* ── Header cố định toàn cục – full width ────────────────── */
-    .site-header {
+    .site-header {{
         background: linear-gradient(135deg, #1a6b3a 0%, #0f4d2a 60%, #0a3d1f 100%);
         border-bottom: 4px solid #f5a623;
         padding: 14px 40px;
@@ -80,46 +117,57 @@ st.markdown("""
         justify-content: center;
         gap: 24px;
         min-height: 106px;
-        /* kéo ra ngoài padding của block-container */
         margin: 0 -1rem 1.5rem -1rem;
-        box-shadow: 0 4px 18px rgba(0,0,0,0.4);
-    }
-    .site-header .logo-wrap {
+        box-shadow: 0 4px 18px rgba(0,0,0,0.45);
+    }}
+    .site-header .logo-wrap {{
         flex-shrink: 0;
         display: flex;
         align-items: center;
         justify-content: center;
-        background: rgba(255,255,255,0.10);
-        border-radius: 12px;
-        padding: 8px 12px;
-    }
-    .site-header .text-wrap {
+        border-radius: 10px;
+        padding: 4px;
+    }}
+    .site-header .text-wrap {{
         flex: 1;
         display: flex;
         flex-direction: column;
-        align-items: center;   /* căn giữa chữ */
+        align-items: center;
         justify-content: center;
         gap: 6px;
         text-align: center;
-    }
-    .site-header .line1 {
+    }}
+    .site-header .line1 {{
         color: #d4f0e0;
         font-size: 0.95rem;
         font-weight: 600;
         letter-spacing: 0.05em;
         text-transform: uppercase;
         line-height: 1.3;
-    }
-    .site-header .line2 {
+    }}
+    .site-header .line2 {{
         color: #f5e642;
         font-size: 1.35rem;
         font-weight: 800;
         line-height: 1.3;
-        text-shadow: 0 1px 5px rgba(0,0,0,0.45);
-    }
+        text-shadow: 0 1px 5px rgba(0,0,0,0.5);
+    }}
+
+    /* ── Card / nội dung module – bán trong suốt ────────────── */
+    div[data-testid="stVerticalBlock"] > div {{
+        /* không override hết – chỉ để nền của widget tự xử lý */
+    }}
+    /* Các metric card, expander, dataframe có nền trắng bán trong suốt */
+    [data-testid="metric-container"],
+    [data-testid="stExpander"],
+    .stDataFrame {{
+        background: rgba(255,255,255,0.88) !important;
+        border-radius: 8px;
+        backdrop-filter: blur(4px);
+    }}
 
     /* ── Các style gốc giữ nguyên ───────────────────────────── */
-    .module-header {
+    .module-header {{
         background: linear-gradient(135deg, #1e3a5f 0%, #2d6a4f 100%);
         color: white;
         padding: 12px 20px;
@@ -130,38 +178,38 @@ st.markdown("""
         display: flex;
         align-items: center;
         gap: 8px;
-    }
-    .sub-module {
-        background: #f0f4f8;
+    }}
+    .sub-module {{
+        background: rgba(240,244,248,0.92);
         border-left: 4px solid #2d6a4f;
         padding: 8px 14px;
         border-radius: 4px;
         margin: 4px 0;
         font-size: 0.95rem;
-    }
-    .status-active  { background: #d4edda; border-left: 4px solid #28a745; }
-    .status-warning { background: #fff3cd; border-left: 4px solid #ffc107; }
-    .status-danger  { background: #f8d7da; border-left: 4px solid #dc3545; }
-    .divider { border: none; border-top: 2px solid #e0e0e0; margin: 20px 0; }
-    .stTabs [data-baseweb="tab-list"] { gap: 6px; }
-    .stTabs [data-baseweb="tab"] {
-        background-color: #e8f4f8;
+    }}
+    .status-active  {{ background: rgba(212,237,218,0.92); border-left: 4px solid #28a745; }}
+    .status-warning {{ background: rgba(255,243,205,0.92); border-left: 4px solid #ffc107; }}
+    .status-danger  {{ background: rgba(248,215,218,0.92); border-left: 4px solid #dc3545; }}
+    .divider {{ border: none; border-top: 2px solid #e0e0e0; margin: 20px 0; }}
+    .stTabs [data-baseweb="tab-list"] {{ gap: 6px; }}
+    .stTabs [data-baseweb="tab"] {{
+        background-color: rgba(232,244,248,0.92);
         border-radius: 6px 6px 0 0;
         padding: 8px 16px;
         font-weight: 600;
-    }
-    .stTabs [aria-selected="true"] {
+    }}
+    .stTabs [aria-selected="true"] {{
         background-color: #1e3a5f !important;
         color: white !important;
-    }
-    .risk-0 { background-color: #ffffff; color: #333; }
-    .risk-1 { background-color: #fffde7; color: #f57f17; font-weight: bold; }
-    .risk-2 { background-color: #fff3e0; color: #e65100; font-weight: bold; }
-    .risk-3 { background-color: #ffebee; color: #b71c1c; font-weight: bold; }
-    [data-testid="stSidebar"] {
+    }}
+    .risk-0 {{ background-color: rgba(255,255,255,0.9); color: #333; }}
+    .risk-1 {{ background-color: rgba(255,253,231,0.92); color: #f57f17; font-weight: bold; }}
+    .risk-2 {{ background-color: rgba(255,243,224,0.92); color: #e65100; font-weight: bold; }}
+    .risk-3 {{ background-color: rgba(255,235,238,0.92); color: #b71c1c; font-weight: bold; }}
+    [data-testid="stSidebar"] {{
         background: linear-gradient(180deg, #1e3a5f 0%, #2d3748 100%);
-    }
-    [data-testid="stSidebar"] * { color: #e2e8f0 !important; }
+    }}
+    [data-testid="stSidebar"] * {{ color: #e2e8f0 !important; }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -203,9 +251,9 @@ with st.sidebar:
 # ─── Nội dung chính ────────────────────────────────────────────────────────────
 if menu == "🏠 Tổng quan":
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("🏘️ Số xã", "28")
+    col1.metric("🏘️ Số xã", "30")
     col2.metric("🌱 Đối tượng nông nghiệp", "4")
-    col3.metric("📅 Kỳ dự báo", "Từ 1 - 3 tháng")
+    col3.metric("📅 Kỳ dự báo", "3 tháng")
     col4.metric("📄 Bản tin đã tạo", "0")
 
     st.markdown("---")
@@ -213,16 +261,13 @@ if menu == "🏠 Tổng quan":
     st.image("/mnt/user-data/uploads/1780451673991_image.png", use_container_width=True)
 
 elif menu == "🔄 Dự báo khí hậu mùa":
-    # Bỏ tiêu đề module, đẩy nội dung lên sát header
     du_bao_tu_dong.render()
 
 elif menu == "📋 Bản tin cảnh báo rủi ro khí hậu":
-    # Bỏ tiêu đề module, đẩy nội dung lên sát header
     ban_tin_xa.render()
 
     st.markdown("---")
 
-    # Export bản tin và Bản tin đã lưu tích hợp vào đây
     tab_export, tab_saved = st.tabs(["📤 Export bản tin", "💾 Bản tin đã lưu"])
     with tab_export:
         export_ban_tin.render()
@@ -230,5 +275,4 @@ elif menu == "📋 Bản tin cảnh báo rủi ro khí hậu":
         ban_tin_da_luu.render()
 
 elif menu == "💬 Phản hồi":
-    # Bỏ tiêu đề module, đẩy nội dung lên sát header
     phan_hoi.render()
