@@ -98,7 +98,7 @@ with st.sidebar:
         [
             "🏠 Tổng quan",
             "🔄 Dự báo khí hậu mùa",
-            "📋 Truyền thông xã (Bản tin)",
+            "📋 Bản tin cảnh báo rủi ro khí hậu",
             "💾 Bản tin đã lưu",
             "📤 Export bản tin",
             "💬 Phản hồi",
