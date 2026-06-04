@@ -63,3 +63,4 @@ streamlit run app.py
 - ✅ Export bản tin ra file `.docx` theo mẫu chuẩn
 - ✅ Lưu trữ và quản lý bản tin trong session
 - ✅ Thu thập phản hồi từ cán bộ địa phương
+# DT_QN
