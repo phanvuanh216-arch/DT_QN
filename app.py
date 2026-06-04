@@ -131,10 +131,10 @@ if menu == "🏠 Tổng quan":
     st.markdown("### 📊 Luồng xử lý hệ thống")
     st.image("/mnt/user-data/uploads/1780451673991_image.png", use_container_width=True)
 
-elif menu == "🔄 Dự báo tự động":
+elif menu == "🔄 Dự báo khí hậu mùa":
     du_bao_tu_dong.render()
 
-elif menu == "📋 Truyền thông xã (Bản tin)":
+elif menu == "📋 Bản tin cảnh báo rủi ro khí hậu":
     ban_tin_xa.render()
 
 elif menu == "💾 Bản tin đã lưu":
