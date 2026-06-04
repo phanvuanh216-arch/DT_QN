@@ -166,6 +166,18 @@ st.markdown(f"""
         backdrop-filter: blur(4px);
     }}
 
+    /* ── Ẩn thanh tiêu đề MODULE trong các module ───────────── */
+    .module-header { display: none !important; }
+    /* Ẩn đoạn mô tả ngay sau .module-header (dòng st.markdown text) */
+    .module-header + div { display: none !important; }
+
+    /* ── Ẩn thanh tiêu đề MODULE trong các module ──────────── */
+    /* .module-header là class của thanh xanh đen "MODULE: ..." */
+    .module-header {{ display: none !important; }}
+    /* Ẩn đoạn text mô tả nằm ngay bên dưới .module-header */
+    .module-header + div,
+    .module-header ~ div:first-of-type {{ display: none !important; }}
+
     /* ── Các style gốc giữ nguyên ───────────────────────────── */
     .module-header {{
         background: linear-gradient(135deg, #1e3a5f 0%, #2d6a4f 100%);
@@ -213,6 +225,36 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
+# ─── JS: ẩn dòng mô tả nằm dưới thanh .module-header ───────────────────────────
+st.markdown("""
+<script>
+(function hideModuleDesc() {
+    function run() {
+        document.querySelectorAll('.module-header').forEach(function(el) {
+            // Ẩn phần tử cha chứa .module-header
+            var parent = el.closest('[data-testid="stMarkdownContainer"]');
+            if (parent) {
+                // Lấy stVerticalBlock cha chứa cả header + description
+                var block = parent.closest('[data-testid="stVerticalBlock"]');
+                if (block) {
+                    var children = Array.from(block.children);
+                    var idx = children.findIndex(function(c) { return c.contains(el); });
+                    // Ẩn phần tử ngay sau (description text)
+                    if (idx >= 0 && children[idx + 1]) {
+                        children[idx + 1].style.display = 'none';
+                    }
+                }
+            }
+        });
+    }
+    // Chạy ngay và sau 1s để đảm bảo DOM đã render
+    run();
+    setTimeout(run, 800);
+    setTimeout(run, 2000);
+})();
+</script>
+""", unsafe_allow_html=True)
+
 # ─── Header cố định – hiển thị trên mọi module ────────────────────────────────
 st.markdown(f"""
 <div class="site-header">
@@ -251,9 +293,9 @@ with st.sidebar:
 # ─── Nội dung chính ────────────────────────────────────────────────────────────
 if menu == "🏠 Tổng quan":
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("🏘️ Số xã", "30")
+    col1.metric("🏘️ Số xã", "28")
     col2.metric("🌱 Đối tượng nông nghiệp", "4")
-    col3.metric("📅 Kỳ dự báo", "3 tháng")
+    col3.metric("📅 Kỳ dự báo", "Từ 1 - 3 tháng")
     col4.metric("📄 Bản tin đã tạo", "0")
 
     st.markdown("---")
