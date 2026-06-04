@@ -97,7 +97,7 @@ with st.sidebar:
         "📌 Chọn module:",
         [
             "🏠 Tổng quan",
-            "🔄 Dự báo tự động",
+            "🔄 Dự báo khí hậu mùa",
             "📋 Truyền thông xã (Bản tin)",
             "💾 Bản tin đã lưu",
             "📤 Export bản tin",
