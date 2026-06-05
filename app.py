@@ -285,9 +285,9 @@ with st.sidebar:
 # ─── Nội dung chính ────────────────────────────────────────────────────────────
 if menu == "🏠 Tổng quan":
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("🏘️ Số xã", "30")
+    col1.metric("🏘️ Số xã", "28")
     col2.metric("🌱 Đối tượng nông nghiệp", "4")
-    col3.metric("📅 Kỳ dự báo", "3 tháng")
+    col3.metric("📅 Kỳ dự báo", "Từ 1 đến 3 tháng")
     col4.metric("📄 Bản tin đã tạo", "0")
 
     st.markdown("---")
