@@ -35,7 +35,7 @@ from scipy.ndimage import gaussian_filter
 from scipy.spatial import cKDTree
 
 # ─── Đường dẫn dữ liệu ────────────────────────────────────────────────────────
-DATA_DIR = "http://222.254.32.10/forecast/Detai_QuangNinh/"
+DATA_DIR = "/imhen-data/share-imhen/phonglv/Detai_QuangNinh/domain_d02"
 
 # ─── Shapefile GitHub ─────────────────────────────────────────────────────────
 _SHP_RAW  = "https://raw.githubusercontent.com/phanvuanh216-arch/DT_QN/main/shp/"
