@@ -392,7 +392,7 @@ def interpolate_and_plot_plotly(lons, lats, vals, meta: dict, title: str,
         return None, "Không có điểm dữ liệu trong vùng Quảng Ninh"
 
     # ── 3. Lưới nội suy ─────────────────────────────────────────────────────
-    GRID_N, SIGMA = 400, 1.2
+    GRID_N, SIGMA = 300, 1.5
     gx_vec = np.linspace(minx, maxx, GRID_N)
     gy_vec = np.linspace(miny, maxy, GRID_N)
     gx, gy = np.meshgrid(gx_vec, gy_vec)
@@ -403,11 +403,18 @@ def interpolate_and_plot_plotly(lons, lats, vals, meta: dict, title: str,
 
     # ── 4. Mask chỉ giữ pixel trong ranh giới tỉnh Quảng Ninh ──────────────
     if mask_shape is not None:
-        prep_s = prep(mask_shape)
-        mask_flat = np.fromiter(
-            (prep_s.contains(Point(px, py)) for px, py in grid_xy),
-            count=grid_xy.shape[0], dtype=bool
-        ).reshape(gx.shape)
+        try:
+            # shapely.vectorized: nhanh hơn ~100x so với loop từng Point
+            from shapely.vectorized import contains as shp_contains
+            mask_flat = shp_contains(mask_shape, gx.ravel(), gy.ravel()).reshape(gx.shape)
+        except (ImportError, AttributeError):
+            # fallback nếu shapely cũ: dùng prepared geometry
+            prep_s = prep(mask_shape)
+            mask_1d = np.array([
+                prep_s.contains(Point(float(px), float(py)))
+                for px, py in grid_xy
+            ], dtype=bool)
+            mask_flat = mask_1d.reshape(gx.shape)
         gv_masked = np.where(mask_flat, gv, np.nan)
     else:
         gv_masked = gv
