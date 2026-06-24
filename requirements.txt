@@ -10,3 +10,4 @@ geopandas
 shapely
 folium
 streamlit-folium
+netCDF4
