@@ -9,6 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from matplotlib.colors import BoundaryNorm
+from matplotlib.patches import Patch
 from scipy.ndimage import gaussian_filter
 from scipy.spatial import cKDTree
 from shapely.geometry import Point
@@ -18,9 +19,6 @@ import requests
 import xarray as xr
 import io, os, re, tempfile, warnings, base64
 from datetime import datetime
-import branca.colormap as cm
-import folium
-from streamlit_folium import st_folium
 
 warnings.filterwarnings("ignore")
 
@@ -247,36 +245,35 @@ def idw_knn(xi, yi, zi, query_xy, k=12, power=3.0, eps=1e-12):
 def interpolate_and_plot(lons, lats, vals, meta: dict, title: str,
                          gdf_tinh_qn, gdf_xa):
     """
-    Nội suy IDW → (folium.Map, matplotlib.Figure, err_str).
-    Các lớp ranh giới luôn được thêm vào bản đồ Folium;
-    người dùng bật/tắt trực tiếp qua LayerControl trong bản đồ.
+    Nội suy IDW → vẽ matplotlib → trả về (png_bytes, err_str).
+    Không dùng Folium — PNG bytes lưu vào session_state ổn định qua mọi re-run.
     """
-    # Xác định bbox từ shapefile xã (ưu tiên) hoặc tỉnh hoặc fallback
+    # Xác định bbox
     ref_gdf = gdf_xa if (gdf_xa is not None and not gdf_xa.empty) else gdf_tinh_qn
     if ref_gdf is not None and not ref_gdf.empty:
         minx, miny, maxx, maxy = ref_gdf.total_bounds
-        minx -= 0.2; miny -= 0.2; maxx += 0.2; maxy += 0.2
+        minx -= 0.15; miny -= 0.15; maxx += 0.15; maxy += 0.15
         shape_union = ref_gdf.unary_union
     else:
         minx, miny, maxx, maxy = 106.3, 20.6, 108.3, 21.8
         shape_union = None
 
-    # Lọc điểm trong vùng mở rộng
+    # Lọc điểm dữ liệu trong vùng mở rộng
     buf = 1.5
     ok = (lons >= minx-buf) & (lons <= maxx+buf) & (lats >= miny-buf) & (lats <= maxy+buf)
     xi, yi, zi = lons[ok], lats[ok], vals[ok]
     if xi.size == 0:
-        return None, None, "Không có điểm dữ liệu trong vùng Quảng Ninh"
+        return None, "Không có điểm dữ liệu trong vùng Quảng Ninh"
 
     # Lưới nội suy
-    GRID_N, SIGMA = 400, 1.0
+    GRID_N, SIGMA = 500, 1.2
     gx, gy = np.meshgrid(np.linspace(minx, maxx, GRID_N), np.linspace(miny, maxy, GRID_N))
     grid_xy = np.column_stack([gx.ravel(), gy.ravel()])
     gv = idw_knn(xi, yi, zi, grid_xy).reshape(gx.shape)
     if SIGMA > 0:
         gv = gaussian_filter(gv, sigma=SIGMA)
 
-    # Mask ranh giới theo vùng nghiên cứu
+    # Mask theo ranh giới vùng nghiên cứu
     if shape_union is not None:
         prep_s = prep(shape_union)
         mask_flat = np.fromiter(
@@ -290,25 +287,7 @@ def interpolate_and_plot(lons, lats, vals, meta: dict, title: str,
     norm   = BoundaryNorm(levels, ncolors=cmap.N, extend="both")
     unit   = meta.get("unit", "")
 
-    # ── Folium ──
-    rgba = cmap(norm(gv))
-    rgba[np.isnan(gv)] = [0, 0, 0, 0]
-    buf_png = io.BytesIO()
-    plt.imsave(buf_png, np.flipud(rgba), format="png")
-    buf_png.seek(0)
-    img_b64 = base64.b64encode(buf_png.read()).decode()
-
-    m = folium.Map(location=[(miny+maxy)/2, (minx+maxx)/2], tiles=None, zoom_start=8)
-    m.fit_bounds([[miny, minx], [maxy, maxx]])
-    folium.TileLayer("CartoDB positron", name="🗺️ Nền sáng",     overlay=False, control=True, show=True).add_to(m)
-    folium.TileLayer("OpenStreetMap",    name="🗺️ OpenStreetMap", overlay=False, control=True, show=False).add_to(m)
-    folium.raster_layers.ImageOverlay(
-        image=f"data:image/png;base64,{img_b64}",
-        bounds=[[miny, minx], [maxy, maxx]],
-        opacity=0.80, name="🎨 Lớp nội suy", interactive=False
-    ).add_to(m)
-
-    # Tìm cột tên xã (dùng cho cả Folium lẫn matplotlib)
+    # Tìm cột tên xã
     xa_name_col = None
     if gdf_xa is not None and not gdf_xa.empty:
         for col in gdf_xa.columns:
@@ -321,89 +300,86 @@ def interpolate_and_plot(lons, lats, vals, meta: dict, title: str,
                     xa_name_col = col
                     break
 
-    # Lớp ranh giới tỉnh Quảng Ninh (mặc định bật, tắt được qua LayerControl)
-    if gdf_tinh_qn is not None and not gdf_tinh_qn.empty:
-        folium.GeoJson(
-            gdf_tinh_qn,
-            name="🏛️ Ranh giới tỉnh",
-            show=True,
-            style_function=lambda x: {
-                "fillColor": "transparent", "color": "#1a1a1a", "weight": 2.0
-            }
-        ).add_to(m)
+    # ── Vẽ matplotlib ──
+    aspect = (maxy - miny) / (maxx - minx)
+    fig_w  = 11
+    fig_h  = max(7, fig_w * aspect + 1.5)
+    fig, ax = plt.subplots(figsize=(fig_w, fig_h), dpi=150)
 
-    # Lớp ranh giới xã (mặc định bật, tắt được qua LayerControl)
-    if gdf_xa is not None and not gdf_xa.empty:
-        folium.GeoJson(
-            gdf_xa,
-            name="🏘️ Ranh giới xã",
-            show=True,
-            style_function=lambda x: {
-                "fillColor": "transparent", "color": "#444444", "weight": 1.0, "dashArray": "4 2"
-            }
-        ).add_to(m)
-
-    # Lớp nhãn tên xã — đặt trong FeatureGroup để bật/tắt được qua LayerControl
-    # Mặc định tắt; người dùng bật khi cần
-    if gdf_xa is not None and not gdf_xa.empty and xa_name_col:
-        label_group = folium.FeatureGroup(name="🔤 Tên xã", show=False)
-        for _, row in gdf_xa.iterrows():
-            try:
-                centroid = row.geometry.centroid
-                folium.Marker(
-                    location=[centroid.y, centroid.x],
-                    icon=folium.DivIcon(
-                        html=f'<div style="font-size:8px;color:#111;font-weight:600;'
-                             f'white-space:nowrap;text-shadow:1px 1px 2px #fff,-1px -1px 2px #fff">'
-                             f'{row[xa_name_col]}</div>',
-                        icon_size=(120, 20), icon_anchor=(60, 10)
-                    )
-                ).add_to(label_group)
-            except Exception:
-                pass
-        label_group.add_to(m)
-
-    cm.StepColormap(
-        colors=[mcolors.to_hex(cmap(norm(v))) for v in levels[:-1]],
-        vmin=levels[0], vmax=levels[-1], index=levels,
-        caption=f"{title} ({unit})"
-    ).add_to(m)
-    folium.LayerControl(position="topleft", collapsed=False).add_to(m)
-
-    # ── Matplotlib static ──
-    fig, ax = plt.subplots(figsize=(9, 7))
-    ax.set_title(title, fontsize=12, fontweight="bold", pad=10)
     im = ax.imshow(gv, extent=[minx, maxx, miny, maxy],
-                   cmap=cmap, norm=norm, interpolation="bilinear", origin="lower")
+                   cmap=cmap, norm=norm, interpolation="bilinear",
+                   origin="lower", alpha=0.92, zorder=2)
+
+    # Ranh giới tỉnh
     if gdf_tinh_qn is not None and not gdf_tinh_qn.empty:
-        gdf_tinh_qn.boundary.plot(ax=ax, edgecolor="#1a1a1a", linewidth=1.5)
+        gdf_tinh_qn.boundary.plot(ax=ax, edgecolor="#111111",
+                                   linewidth=1.8, zorder=4)
+
+    # Ranh giới xã
     if gdf_xa is not None and not gdf_xa.empty:
-        gdf_xa.boundary.plot(ax=ax, edgecolor="#555555", linewidth=0.7, linestyle="--")
+        gdf_xa.boundary.plot(ax=ax, edgecolor="#444444",
+                              linewidth=0.8, linestyle="--", zorder=3)
+
+    # Tên xã
     if gdf_xa is not None and not gdf_xa.empty and xa_name_col:
         for _, row in gdf_xa.iterrows():
             try:
                 c = row.geometry.centroid
                 ax.text(c.x, c.y, str(row[xa_name_col]),
-                        fontsize=5, ha="center", va="center", color="#111",
-                        fontweight="bold",
-                        bbox=dict(boxstyle="round,pad=0.1", fc="white", alpha=0.5, ec="none"))
+                        fontsize=5.5, ha="center", va="center",
+                        color="#111", fontweight="bold", zorder=5,
+                        bbox=dict(boxstyle="round,pad=0.15",
+                                  fc="white", alpha=0.55, ec="none"))
             except Exception:
                 pass
-    cbar = plt.colorbar(im, ax=ax, extend="both", shrink=0.75, pad=0.02)
+
+    # Colorbar
+    cbar = plt.colorbar(im, ax=ax, extend="both",
+                        shrink=0.80, pad=0.02, aspect=28)
     cbar.set_label(f"Chuẩn sai ({unit})", fontsize=10)
-    cbar.set_ticks(levels); cbar.set_ticklabels([str(v) for v in levels])
+    cbar.set_ticks(levels)
+    cbar.set_ticklabels([str(v) for v in levels], fontsize=8)
+
+    ax.set_title(title, fontsize=12, fontweight="bold", pad=10)
     ax.set_xlim(minx, maxx); ax.set_ylim(miny, maxy)
-    ax.set_xlabel("Kinh độ"); ax.set_ylabel("Vĩ độ")
+    ax.set_xlabel("Kinh độ (°E)", fontsize=9)
+    ax.set_ylabel("Vĩ độ (°N)",   fontsize=9)
     ax.ticklabel_format(useOffset=False, style="plain")
+    ax.tick_params(labelsize=8)
+
+    # Legend lớp ranh giới
+    legend_handles = []
+    if gdf_tinh_qn is not None and not gdf_tinh_qn.empty:
+        legend_handles.append(
+            Patch(facecolor="none", edgecolor="#111111",
+                  linewidth=1.5, label="Ranh giới tỉnh")
+        )
+    if gdf_xa is not None and not gdf_xa.empty:
+        legend_handles.append(
+            Patch(facecolor="none", edgecolor="#444444",
+                  linewidth=0.8, linestyle="--", label="Ranh giới xã")
+        )
+    if legend_handles:
+        ax.legend(handles=legend_handles, loc="lower right",
+                  fontsize=7, framealpha=0.8)
+
     plt.tight_layout()
-    return m, fig, None
+
+    # Xuất PNG bytes
+    buf_out = io.BytesIO()
+    fig.savefig(buf_out, format="png", dpi=150, bbox_inches="tight")
+    buf_out.seek(0)
+    png_bytes = buf_out.getvalue()
+    plt.close(fig)
+
+    return png_bytes, None
 
 
 def render_var_panel(var_prefix, meta, period, month_idx, gdf_tinh_qn, gdf_xa,
                      month_labels, state_key: str):
     """
-    Tải → nội suy → lưu kết quả vào st.session_state[state_key].
-    Hàm display_panel() sẽ đọc và hiển thị — kết quả không biến mất khi re-run.
+    Tải → nội suy → lưu PNG bytes vào st.session_state[state_key].
+    PNG bytes là plain bytes → ổn định 100% qua mọi lần re-run Streamlit.
     """
     with st.spinner(f"⏳ Đang tải {meta['label']} …"):
         nc_bytes = download_nc(period, var_prefix)
@@ -421,25 +397,15 @@ def render_var_panel(var_prefix, meta, period, month_idx, gdf_tinh_qn, gdf_xa,
     title = f"Chuẩn sai {meta['label']} – {month_str} (Kỳ {period[:4]}/{period[4:]})"
 
     with st.spinner("🗺️ Đang vẽ bản đồ …"):
-        fmap, fig, err2 = interpolate_and_plot(
+        png_bytes, err2 = interpolate_and_plot(
             lons, lats, vals, meta, title, gdf_tinh_qn, gdf_xa
         )
     if err2:
         st.session_state[state_key] = {"error": err2}
         return
 
-    # Lưu PNG vào bytes để download
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=120, bbox_inches="tight")
-    buf.seek(0)
-    png_bytes = buf.getvalue()
-    plt.close(fig)
-
-    # Lưu toàn bộ kết quả vào session_state — tồn tại qua các lần re-run
     st.session_state[state_key] = {
-        "fmap":      fmap,
         "png_bytes": png_bytes,
-        "title":     title,
         "label":     meta["label"],
         "filename":  f"chuan_sai_{var_prefix.replace('.','_')}_{period}_t{month_idx+1}.png",
         "error":     None,
@@ -447,14 +413,17 @@ def render_var_panel(var_prefix, meta, period, month_idx, gdf_tinh_qn, gdf_xa,
 
 
 def display_panel(state_key: str):
-    """Hiển thị bản đồ và nút download từ session_state — luôn hiện dù có re-run."""
+    """
+    Hiển thị ảnh PNG từ session_state bằng st.image().
+    Luôn hiện qua mọi lần re-run — không bao giờ biến mất.
+    """
     result = st.session_state.get(state_key)
     if result is None:
         return
     if result.get("error"):
         st.error(f"❌ {result['error']}")
         return
-    st_folium(result["fmap"], width=None, height=520, use_container_width=True)
+    st.image(result["png_bytes"], use_container_width=True)
     st.download_button(
         f"⬇️ Tải PNG – {result['label']}",
         data=result["png_bytes"],
