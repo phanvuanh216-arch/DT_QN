@@ -35,7 +35,11 @@ import re
 import numpy as np
 import requests
 import streamlit as st
-import netCDF4 as nc
+def doc_du_lieu_raster(ky_chay: str, ma_bien: str, han: int) -> dict:
+    import netCDF4 as nc   # ← thêm vào đây
+    
+    raw = tai_file_nc(ky_chay, ma_bien)
+    ...
 
 
 BASE_URL = "http://222.254.32.10/forecast/Detai_QuangNinh/domain_d02/"
