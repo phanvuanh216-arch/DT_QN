@@ -20,6 +20,7 @@ from utils.nc_data_fetcher import (
     mask_raster_theo_tinh,
     doc_shapefile_xa,
     doc_ranh_gioi_tinh,
+    noi_suy_idw_luoi_min,
 )
 
 
@@ -271,22 +272,43 @@ def _bounds_tinh_netcdf():
 
 
 def _ve_ban_do_netcdf(lon: np.ndarray, lat: np.ndarray, data: np.ndarray, ten_bien: str, don_vi: str, cmap: str):
-    """Vẽ bản đồ raster chuẩn sai, mask theo ranh giới tỉnh, phủ ranh giới xã."""
-    data_mask = mask_raster_theo_tinh(lon, lat, data)
+    """
+    Vẽ bản đồ raster chuẩn sai, mask theo ranh giới tỉnh, phủ ranh giới xã.
+    Trước khi vẽ, dữ liệu được nội suy IDW (k-NN) + làm mịn Gaussian sang lưới mịn hơn
+    (cùng phương pháp idw_knn() dùng cho bản đồ nội suy quan trắc), giúp bản đồ không
+    bị "rỗ" theo từng ô lưới thô của mô hình.
+    """
+    # Mask theo tỉnh TRƯỚC khi nội suy: loại các điểm lưới ngoài Quảng Ninh (biển, tỉnh khác)
+    # ra khỏi tập điểm dùng làm input cho IDW, tránh kéo giá trị sai lệch vào trong tỉnh.
+    data_mask_truoc = mask_raster_theo_tinh(lon, lat, data)
+
+    if np.all(np.isnan(data_mask_truoc)):
+        fig, ax = plt.subplots(figsize=(9, 8))
+        ax.text(0.5, 0.5, "Không có dữ liệu hợp lệ trong phạm vi tỉnh", ha="center", va="center")
+        ax.set_axis_off()
+        return fig
+
+    ket_qua_min = noi_suy_idw_luoi_min(lon, lat, data_mask_truoc, grid_n=400, k=12, power=3.0, sigma=1.2)
+    lon_min, lat_min, data_min = ket_qua_min["lon"], ket_qua_min["lat"], ket_qua_min["data"]
+
+    # Mask theo tỉnh SAU khi nội suy: IDW có thể lan nhẹ giá trị ra ngoài biên tỉnh
+    # (vì lưới mịn có điểm nằm sát biên), nên cắt lại cho khớp ranh giới thật.
+    data_final = mask_raster_theo_tinh(lon_min, lat_min, data_min)
+
     gdf_xa = doc_shapefile_xa()
     bounds = _bounds_tinh_netcdf()
 
     fig, ax = plt.subplots(figsize=(9, 8))
 
-    if np.all(np.isnan(data_mask)):
+    if np.all(np.isnan(data_final)):
         ax.text(0.5, 0.5, "Không có dữ liệu hợp lệ trong phạm vi tỉnh", ha="center", va="center")
         ax.set_axis_off()
         return fig
 
-    vmax = np.nanmax(np.abs(data_mask))
+    vmax = np.nanmax(np.abs(data_final))
     vmax = vmax if vmax > 0 else 1.0
     pc = ax.pcolormesh(
-        lon, lat, data_mask,
+        lon_min, lat_min, data_final,
         cmap=cmap, vmin=-vmax, vmax=vmax, shading="auto",
     )
 
