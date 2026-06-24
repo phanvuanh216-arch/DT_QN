@@ -1,7 +1,12 @@
+venv/
+besttrack_env/
+bin/
+lib/
+lib64/
+share/
+pyvenv.cfg
 __pycache__/
 *.pyc
-.env
-.streamlit/secrets.toml
-exports/
-*.docx
-*.json
+
+# Không upload script update
+1.update.sh
