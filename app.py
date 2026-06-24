@@ -1,18 +1,17 @@
 # -*- coding: utf-8 -*-
 """
 Ứng dụng Streamlit - Hệ thống Bản tin Khí hậu Nông nghiệp Quảng Ninh
-File duy nhất, không cần thư mục modules/
+- Nội suy toàn tỉnh Quảng Ninh (mask theo ranh giới tỉnh)
+- Lớp xã chỉ là overlay bật/tắt để xem vùng nghiên cứu
+- Zoom/pan tương tác qua Plotly
 """
 
 import streamlit as st
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
-from matplotlib.colors import BoundaryNorm
-from matplotlib.patches import Patch
+import plotly.graph_objects as go
 from scipy.ndimage import gaussian_filter
 from scipy.spatial import cKDTree
-from shapely.geometry import Point
+from shapely.geometry import Point, MultiPolygon, Polygon
 from shapely.prepared import prep
 import geopandas as gpd
 import requests
@@ -83,6 +82,15 @@ EXTREME_VARS = {
     "ano.Evap":   {"label": "Bốc hơi (Evap)",                 "unit": "mm",   "cmap": "BrBG",     "levels": [-100,-50,-25,-10,0,10,25,50,100]},
 }
 
+# Ánh xạ tên colormap matplotlib → Plotly
+CMAP_MAP = {
+    "RdBu_r":    "RdBu",
+    "RdBu":      [[0,"#2166ac"],[0.5,"#f7f7f7"],[1,"#d6604d"]],
+    "BrBG":      "BrBG",
+    "RdYlBu_r":  "RdYlBu",
+    "RdYlBu":    [[0,"#4575b4"],[0.5,"#ffffbf"],[1,"#d73027"]],
+}
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # HÀM TIỆN ÍCH – DỮ LIỆU
@@ -126,7 +134,6 @@ def load_nc_data(nc_bytes: bytes, month_idx: int):
             return None, None, None, "Không tìm thấy biến dữ liệu"
         da = ds[data_vars[0]]
 
-        # Chọn tháng
         time_dims = [d for d in da.dims if 'time' in d.lower() or 'month' in d.lower()]
         if time_dims:
             da = da.isel({time_dims[0]: min(month_idx, da.sizes[time_dims[0]] - 1)})
@@ -155,11 +162,8 @@ def load_nc_data(nc_bytes: bytes, month_idx: int):
 @st.cache_resource(show_spinner=False)
 def load_shapefiles():
     """
-    Tải shapefile tỉnh (RG_34TINH) và xã vùng nghiên cứu (QN_XA_FINAL) từ GitHub.
-    Trả về (gdf_all_tinh, gdf_tinh_qn, gdf_xa):
-      - gdf_all_tinh : toàn bộ các tỉnh (dùng làm nền)
-      - gdf_tinh_qn  : chỉ Quảng Ninh (dùng vẽ viền đậm)
-      - gdf_xa       : ranh giới xã trong vùng nghiên cứu
+    Tải shapefile tỉnh (RG_34TINH) và xã vùng nghiên cứu (QN_XA_FINAL).
+    Trả về (gdf_all_tinh, gdf_tinh_qn, gdf_xa).
     """
     exts = [".shp", ".dbf", ".shx", ".prj"]
     tmp_dir = tempfile.mkdtemp()
@@ -188,7 +192,6 @@ def load_shapefiles():
                 gdf_all = gdf_all.to_crs(epsg=4326)
             gdf_all_tinh = gdf_all.copy()
 
-            # Lọc riêng Quảng Ninh
             qn_mask = None
             for col_raw in gdf_all.columns:
                 col_up = col_raw.upper()
@@ -205,8 +208,7 @@ def load_shapefiles():
             if qn_mask is not None and qn_mask.any():
                 gdf_tinh_qn = gdf_all[qn_mask].copy()
     except Exception:
-        gdf_all_tinh = None
-        gdf_tinh_qn  = None
+        pass
 
     try:
         path_xa = _download_shp("QN_XA_FINAL")
@@ -215,13 +217,13 @@ def load_shapefiles():
             if gdf_xa.crs and gdf_xa.crs.to_epsg() != 4326:
                 gdf_xa = gdf_xa.to_crs(epsg=4326)
     except Exception:
-        gdf_xa = None
+        pass
 
     return gdf_all_tinh, gdf_tinh_qn, gdf_xa
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# HÀM NỘI SUY IDW-KNN
+# IDW-KNN
 # ══════════════════════════════════════════════════════════════════════════════
 
 def idw_knn(xi, yi, zi, query_xy, k=12, power=3.0, eps=1e-12):
@@ -241,42 +243,131 @@ def idw_knn(xi, yi, zi, query_xy, k=12, power=3.0, eps=1e-12):
     return out
 
 
-def interpolate_and_plot(lons, lats, vals, meta: dict, title: str,
-                         gdf_all_tinh, gdf_tinh_qn, gdf_xa):
-    """
-    Nội suy IDW chỉ trong vùng Quảng Ninh.
-    Vẽ nền xám các tỉnh lân cận, zoom cố định theo bbox Quảng Ninh.
-    Trả về (png_bytes, err_str).
-    """
-    # ── 1. Xác định bbox zoom theo Quảng Ninh ──
-    # Ưu tiên: gdf_xa → gdf_tinh_qn → fallback hardcode
-    ref_qn = None
-    if gdf_xa is not None and not gdf_xa.empty:
-        ref_qn = gdf_xa
-    elif gdf_tinh_qn is not None and not gdf_tinh_qn.empty:
-        ref_qn = gdf_tinh_qn
+# ══════════════════════════════════════════════════════════════════════════════
+# HELPER: matplotlib colormap → Plotly colorscale
+# ══════════════════════════════════════════════════════════════════════════════
 
-    if ref_qn is not None:
-        minx, miny, maxx, maxy = ref_qn.total_bounds
+def mpl_cmap_to_plotly(cmap_name: str, n: int = 256) -> list:
+    """Chuyển colormap matplotlib sang dạng Plotly [[pos, 'rgb(...)'], ...]."""
+    import matplotlib.pyplot as plt
+    cmap = plt.get_cmap(cmap_name)
+    positions = np.linspace(0, 1, n)
+    colorscale = []
+    for pos in positions:
+        r, g, b, _ = cmap(pos)
+        colorscale.append([pos, f"rgb({int(r*255)},{int(g*255)},{int(b*255)})"])
+    return colorscale
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# HELPER: Shapely geometry → Plotly fill traces (tỉnh nền xám)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def gdf_to_plotly_fill(gdf, fillcolor="rgba(200,210,220,0.8)",
+                        line_color="#aab0b8", line_width=0.6, name=""):
+    """Trả về list Scatter traces từ GeoDataFrame (polygon/multipolygon)."""
+    traces = []
+    for geom in gdf.geometry:
+        if geom is None or geom.is_empty:
+            continue
+        polys = list(geom.geoms) if geom.geom_type == "MultiPolygon" else [geom]
+        for poly in polys:
+            xs, ys = poly.exterior.xy
+            traces.append(go.Scatter(
+                x=list(xs) + [None], y=list(ys) + [None],
+                fill="toself", fillcolor=fillcolor,
+                line=dict(color=line_color, width=line_width),
+                mode="lines", hoverinfo="skip", showlegend=False, name=name
+            ))
+            for interior in poly.interiors:
+                ix, iy = interior.xy
+                traces.append(go.Scatter(
+                    x=list(ix) + [None], y=list(iy) + [None],
+                    fill="toself", fillcolor="white",
+                    line=dict(color=line_color, width=line_width),
+                    mode="lines", hoverinfo="skip", showlegend=False
+                ))
+    return traces
+
+
+def gdf_boundary_to_plotly(gdf, line_color="#111111", line_width=2.0,
+                             dash="solid", name="", show_legend=True):
+    """Trả về list Scatter traces chỉ vẽ viền (không fill)."""
+    traces = []
+    first = True
+    for geom in gdf.geometry:
+        if geom is None or geom.is_empty:
+            continue
+        polys = list(geom.geoms) if geom.geom_type == "MultiPolygon" else [geom]
+        for poly in polys:
+            xs, ys = poly.exterior.xy
+            traces.append(go.Scatter(
+                x=list(xs) + [None], y=list(ys) + [None],
+                mode="lines",
+                line=dict(color=line_color, width=line_width, dash=dash),
+                hoverinfo="skip",
+                showlegend=show_legend and first,
+                name=name,
+                legendgroup=name,
+            ))
+            first = False
+    return traces
+
+
+def gdf_xa_labels_to_plotly(gdf_xa, name_col):
+    """Trả về Scatter trace với tên xã đặt tại centroid."""
+    xs, ys, texts = [], [], []
+    for _, row in gdf_xa.iterrows():
+        try:
+            c = row.geometry.centroid
+            xs.append(c.x)
+            ys.append(c.y)
+            texts.append(str(row[name_col]))
+        except Exception:
+            pass
+    return go.Scatter(
+        x=xs, y=ys, mode="text",
+        text=texts,
+        textfont=dict(size=9, color="#111111", family="Arial, sans-serif"),
+        textposition="middle center",
+        hoverinfo="skip",
+        showlegend=True,
+        name="Tên xã",
+        legendgroup="xa_label",
+    )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# MAIN: NỘI SUY + VẼ PLOTLY
+# ══════════════════════════════════════════════════════════════════════════════
+
+def interpolate_and_plot_plotly(lons, lats, vals, meta: dict, title: str,
+                                 gdf_all_tinh, gdf_tinh_qn, gdf_xa,
+                                 show_xa: bool):
+    """
+    - Nội suy IDW trên toàn tỉnh Quảng Ninh (mask = ranh giới tỉnh QN).
+    - Lớp xã chỉ là overlay bật/tắt.
+    - Trả về (plotly_figure, err_str).
+    """
+
+    # ── 1. Xác định bbox theo tỉnh Quảng Ninh ──────────────────────────────
+    if gdf_tinh_qn is not None and not gdf_tinh_qn.empty:
+        minx, miny, maxx, maxy = gdf_tinh_qn.total_bounds
+        mask_shape = gdf_tinh_qn.unary_union
+    elif gdf_xa is not None and not gdf_xa.empty:
+        minx, miny, maxx, maxy = gdf_xa.total_bounds
+        mask_shape = gdf_xa.unary_union
     else:
         minx, miny, maxx, maxy = 106.3, 20.6, 108.3, 21.8
+        mask_shape = None
 
-    # Buffer nhỏ xung quanh để không bị sát viền
     BUF = 0.12
     plot_minx = minx - BUF
     plot_miny = miny - BUF
     plot_maxx = maxx + BUF
     plot_maxy = maxy + BUF
 
-    # ── 2. Xác định polygon mask nội suy (chỉ Quảng Ninh) ──
-    if ref_qn is not None:
-        shape_union = ref_qn.unary_union
-    elif gdf_tinh_qn is not None and not gdf_tinh_qn.empty:
-        shape_union = gdf_tinh_qn.unary_union
-    else:
-        shape_union = None
-
-    # ── 3. Lọc điểm dữ liệu – mở rộng hơn để IDW có đủ hàng xóm ──
+    # ── 2. Lọc điểm dữ liệu (buffer rộng cho IDW) ──────────────────────────
     buf_data = 1.5
     ok = ((lons >= minx - buf_data) & (lons <= maxx + buf_data) &
           (lats >= miny - buf_data) & (lats <= maxy + buf_data))
@@ -284,34 +375,81 @@ def interpolate_and_plot(lons, lats, vals, meta: dict, title: str,
     if xi.size == 0:
         return None, "Không có điểm dữ liệu trong vùng Quảng Ninh"
 
-    # ── 4. Lưới nội suy (chỉ trong bbox Quảng Ninh) ──
-    GRID_N, SIGMA = 500, 1.2
-    gx, gy = np.meshgrid(
-        np.linspace(minx, maxx, GRID_N),
-        np.linspace(miny, maxy, GRID_N)
-    )
+    # ── 3. Lưới nội suy ─────────────────────────────────────────────────────
+    GRID_N, SIGMA = 400, 1.2
+    gx_vec = np.linspace(minx, maxx, GRID_N)
+    gy_vec = np.linspace(miny, maxy, GRID_N)
+    gx, gy = np.meshgrid(gx_vec, gy_vec)
     grid_xy = np.column_stack([gx.ravel(), gy.ravel()])
     gv = idw_knn(xi, yi, zi, grid_xy).reshape(gx.shape)
     if SIGMA > 0:
         gv = gaussian_filter(gv, sigma=SIGMA)
 
-    # ── 5. Mask: chỉ giữ pixel nằm trong polygon Quảng Ninh ──
-    if shape_union is not None:
-        prep_s = prep(shape_union)
+    # ── 4. Mask chỉ giữ pixel trong ranh giới tỉnh Quảng Ninh ──────────────
+    if mask_shape is not None:
+        prep_s = prep(mask_shape)
         mask_flat = np.fromiter(
             (prep_s.contains(Point(px, py)) for px, py in grid_xy),
             count=grid_xy.shape[0], dtype=bool
         ).reshape(gx.shape)
-        gv = np.where(mask_flat, gv, np.nan)
+        gv_masked = np.where(mask_flat, gv, np.nan)
+    else:
+        gv_masked = gv
 
+    # ── 5. Clip giá trị vào khoảng levels ──────────────────────────────────
     levels = sorted(meta.get("levels", list(range(-5, 6))))
-    cmap   = plt.get_cmap(meta.get("cmap", "RdBu_r"))
-    norm   = BoundaryNorm(levels, ncolors=cmap.N, extend="both")
-    unit   = meta.get("unit", "")
+    vmin, vmax = levels[0], levels[-1]
+    gv_clipped = np.clip(gv_masked, vmin, vmax)
+    gv_display = np.where(np.isnan(gv_masked), np.nan, gv_clipped)
 
-    # Tên xã
-    xa_name_col = None
+    # ── 6. Colorscale ───────────────────────────────────────────────────────
+    cmap_name = meta.get("cmap", "RdBu_r")
+    colorscale = mpl_cmap_to_plotly(cmap_name)
+    unit = meta.get("unit", "")
+
+    # ── 7. Xây dựng figure Plotly ───────────────────────────────────────────
+    fig = go.Figure()
+
+    # 7a. Nền xám các tỉnh lân cận
+    if gdf_all_tinh is not None and not gdf_all_tinh.empty:
+        for tr in gdf_to_plotly_fill(gdf_all_tinh,
+                                      fillcolor="rgba(210,218,226,0.85)",
+                                      line_color="#aab0b8", line_width=0.5):
+            fig.add_trace(tr)
+
+    # 7b. Heatmap nội suy (toàn tỉnh Quảng Ninh)
+    fig.add_trace(go.Heatmap(
+        z=gv_display,
+        x=gx_vec,
+        y=gy_vec,
+        colorscale=colorscale,
+        zmin=vmin, zmax=vmax,
+        colorbar=dict(
+            title=dict(text=f"Chuẩn sai ({unit})", side="right", font=dict(size=12)),
+            tickvals=levels,
+            ticktext=[str(v) for v in levels],
+            tickfont=dict(size=10),
+            thickness=16,
+            len=0.75,
+        ),
+        opacity=0.88,
+        hovertemplate="Lon: %{x:.3f}°E<br>Lat: %{y:.3f}°N<br>Giá trị: %{z:.2f}" + unit + "<extra></extra>",
+        name="Nội suy",
+        showscale=True,
+    ))
+
+    # 7c. Viền tỉnh Quảng Ninh đậm
+    if gdf_tinh_qn is not None and not gdf_tinh_qn.empty:
+        for tr in gdf_boundary_to_plotly(gdf_tinh_qn,
+                                          line_color="#111111", line_width=2.2,
+                                          name="Ranh giới Quảng Ninh",
+                                          show_legend=True):
+            fig.add_trace(tr)
+
+    # 7d. Ranh giới & tên xã (overlay bật/tắt qua toggle)
     if gdf_xa is not None and not gdf_xa.empty:
+        # Tìm cột tên xã
+        xa_name_col = None
         for col in gdf_xa.columns:
             if col.upper() in ("TEN_XA", "TENXA", "XA", "NAME", "TEN"):
                 xa_name_col = col
@@ -322,103 +460,90 @@ def interpolate_and_plot(lons, lats, vals, meta: dict, title: str,
                     xa_name_col = col
                     break
 
-    # ── 6. Vẽ matplotlib ──
-    aspect = (plot_maxy - plot_miny) / (plot_maxx - plot_minx)
-    fig_w  = 11
-    fig_h  = max(7, fig_w * aspect + 1.5)
-    fig, ax = plt.subplots(figsize=(fig_w, fig_h), dpi=150)
+        xa_visible = True if show_xa else "legendonly"
 
-    # 6a. Nền xám tất cả các tỉnh (clip theo extent hiển thị)
-    if gdf_all_tinh is not None and not gdf_all_tinh.empty:
-        gdf_all_tinh.plot(ax=ax, facecolor="#dde3e8", edgecolor="#aab0b8",
-                          linewidth=0.6, zorder=1)
+        # Viền xã
+        first_xa = True
+        for geom in gdf_xa.geometry:
+            if geom is None or geom.is_empty:
+                continue
+            polys = list(geom.geoms) if geom.geom_type == "MultiPolygon" else [geom]
+            for poly in polys:
+                xs_p, ys_p = poly.exterior.xy
+                fig.add_trace(go.Scatter(
+                    x=list(xs_p) + [None], y=list(ys_p) + [None],
+                    mode="lines",
+                    line=dict(color="#e07b00", width=1.1, dash="dot"),
+                    hoverinfo="skip",
+                    visible=xa_visible,
+                    showlegend=first_xa,
+                    name="Ranh giới xã",
+                    legendgroup="xa_border",
+                ))
+                first_xa = False
 
-    # 6b. Lớp màu nội suy (chỉ Quảng Ninh)
-    im = ax.imshow(
-        gv,
-        extent=[minx, maxx, miny, maxy],   # extent đúng với lưới nội suy
-        cmap=cmap, norm=norm,
-        interpolation="bilinear",
-        origin="lower", alpha=0.92, zorder=2
+        # Tên xã
+        if xa_name_col:
+            lbl_trace = gdf_xa_labels_to_plotly(gdf_xa, xa_name_col)
+            lbl_trace.visible = xa_visible
+            fig.add_trace(lbl_trace)
+
+    # ── 8. Layout ──────────────────────────────────────────────────────────
+    fig.update_layout(
+        title=dict(text=title, font=dict(size=14, family="Arial, sans-serif"),
+                   x=0.5, xanchor="center"),
+        xaxis=dict(
+            title="Kinh độ (°E)",
+            range=[plot_minx, plot_maxx],
+            tickformat=".2f",
+            scaleanchor="y", scaleratio=1,
+            constrain="domain",
+            showgrid=True, gridcolor="rgba(180,180,180,0.3)", gridwidth=0.5,
+        ),
+        yaxis=dict(
+            title="Vĩ độ (°N)",
+            range=[plot_miny, plot_maxy],
+            tickformat=".2f",
+            showgrid=True, gridcolor="rgba(180,180,180,0.3)", gridwidth=0.5,
+        ),
+        legend=dict(
+            x=0.01, y=0.01,
+            bgcolor="rgba(255,255,255,0.85)",
+            bordercolor="#aaa", borderwidth=1,
+            font=dict(size=10),
+        ),
+        margin=dict(l=60, r=20, t=60, b=50),
+        height=680,
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        hovermode="closest",
+        dragmode="zoom",   # cho phép zoom bằng chuột kéo
     )
 
-    # 6c. Viền tỉnh Quảng Ninh đậm hơn
-    if gdf_tinh_qn is not None and not gdf_tinh_qn.empty:
-        gdf_tinh_qn.boundary.plot(ax=ax, edgecolor="#111111",
-                                   linewidth=2.0, zorder=4)
+    # Nút zoom/pan/reset trên toolbar
+    fig.update_layout(
+        modebar_add=["zoom", "pan", "zoomIn2d", "zoomOut2d", "resetScale2d"],
+        modebar_remove=["lasso2d", "select2d"],
+    )
 
-    # 6d. Ranh giới xã
-    if gdf_xa is not None and not gdf_xa.empty:
-        gdf_xa.boundary.plot(ax=ax, edgecolor="#444444",
-                              linewidth=0.8, linestyle="--", zorder=3)
+    return fig, None
 
-    # 6e. Tên xã
-    if gdf_xa is not None and not gdf_xa.empty and xa_name_col:
-        for _, row in gdf_xa.iterrows():
-            try:
-                c = row.geometry.centroid
-                ax.text(c.x, c.y, str(row[xa_name_col]),
-                        fontsize=5.5, ha="center", va="center",
-                        color="#111", fontweight="bold", zorder=5,
-                        bbox=dict(boxstyle="round,pad=0.15",
-                                  fc="white", alpha=0.55, ec="none"))
-            except Exception:
-                pass
 
-    # 6f. Colorbar
-    cbar = plt.colorbar(im, ax=ax, extend="both",
-                        shrink=0.80, pad=0.02, aspect=28)
-    cbar.set_label(f"Chuẩn sai ({unit})", fontsize=10)
-    cbar.set_ticks(levels)
-    cbar.set_ticklabels([str(v) for v in levels], fontsize=8)
-
-    # 6g. Giới hạn zoom cố định theo Quảng Ninh + buffer
-    ax.set_xlim(plot_minx, plot_maxx)
-    ax.set_ylim(plot_miny, plot_maxy)
-
-    ax.set_title(title, fontsize=12, fontweight="bold", pad=10)
-    ax.set_xlabel("Kinh độ (°E)", fontsize=9)
-    ax.set_ylabel("Vĩ độ (°N)",   fontsize=9)
-    ax.ticklabel_format(useOffset=False, style="plain")
-    ax.tick_params(labelsize=8)
-
-    # Legend
-    legend_handles = []
-    if gdf_tinh_qn is not None and not gdf_tinh_qn.empty:
-        legend_handles.append(
-            Patch(facecolor="none", edgecolor="#111111",
-                  linewidth=1.5, label="Ranh giới Quảng Ninh")
-        )
-    if gdf_xa is not None and not gdf_xa.empty:
-        legend_handles.append(
-            Patch(facecolor="none", edgecolor="#444444",
-                  linewidth=0.8, linestyle="--", label="Ranh giới xã")
-        )
-    if legend_handles:
-        ax.legend(handles=legend_handles, loc="lower right",
-                  fontsize=7, framealpha=0.8)
-
-    plt.tight_layout()
-
-    buf_out = io.BytesIO()
-    fig.savefig(buf_out, format="png", dpi=150, bbox_inches="tight")
-    buf_out.seek(0)
-    png_bytes = buf_out.getvalue()
-    plt.close(fig)
-
-    return png_bytes, None
-
+# ══════════════════════════════════════════════════════════════════════════════
+# RENDER + DISPLAY PANEL
+# ══════════════════════════════════════════════════════════════════════════════
 
 def render_var_panel(var_prefix, meta, period, month_idx,
                      gdf_all_tinh, gdf_tinh_qn, gdf_xa,
-                     month_labels, state_key: str):
+                     month_labels, state_key: str, show_xa: bool):
     with st.spinner(f"⏳ Đang tải {meta['label']} …"):
         nc_bytes = download_nc(period, var_prefix)
     if nc_bytes is None:
-        st.session_state[state_key] = {"error": f"Không tải được file NC: {var_prefix}.{period}.nc"}
+        st.session_state[state_key] = {
+            "error": f"Không tải được file NC: {var_prefix}.{period}.nc"}
         return
 
-    with st.spinner("🔄 Đang nội suy …"):
+    with st.spinner("🔄 Đang đọc dữ liệu …"):
         lons, lats, vals, err = load_nc_data(nc_bytes, month_idx)
     if err:
         st.session_state[state_key] = {"error": f"Lỗi đọc dữ liệu: {err}"}
@@ -427,20 +552,21 @@ def render_var_panel(var_prefix, meta, period, month_idx,
     month_str = month_labels[month_idx] if month_idx < len(month_labels) else f"Tháng +{month_idx+1}"
     title = f"Chuẩn sai {meta['label']} – {month_str} (Kỳ {period[:4]}/{period[4:]})"
 
-    with st.spinner("🗺️ Đang vẽ bản đồ …"):
-        png_bytes, err2 = interpolate_and_plot(
+    with st.spinner("🗺️ Đang nội suy và vẽ bản đồ …"):
+        fig, err2 = interpolate_and_plot_plotly(
             lons, lats, vals, meta, title,
-            gdf_all_tinh, gdf_tinh_qn, gdf_xa
+            gdf_all_tinh, gdf_tinh_qn, gdf_xa,
+            show_xa=show_xa,
         )
     if err2:
         st.session_state[state_key] = {"error": err2}
         return
 
     st.session_state[state_key] = {
-        "png_bytes": png_bytes,
-        "label":     meta["label"],
-        "filename":  f"chuan_sai_{var_prefix.replace('.','_')}_{period}_t{month_idx+1}.png",
-        "error":     None,
+        "fig":      fig,
+        "label":    meta["label"],
+        "filename": f"chuan_sai_{var_prefix.replace('.','_')}_{period}_t{month_idx+1}.png",
+        "error":    None,
     }
 
 
@@ -451,14 +577,20 @@ def display_panel(state_key: str):
     if result.get("error"):
         st.error(f"❌ {result['error']}")
         return
-    st.image(result["png_bytes"], use_container_width=True)
-    st.download_button(
-        f"⬇️ Tải PNG – {result['label']}",
-        data=result["png_bytes"],
-        file_name=result["filename"],
-        mime="image/png",
-        key=f"dl_{state_key}",
-    )
+    # Hiển thị Plotly chart (có zoom/pan)
+    st.plotly_chart(result["fig"], use_container_width=True,
+                    config={
+                        "scrollZoom": True,       # zoom bằng scroll chuột
+                        "displayModeBar": True,
+                        "modeBarButtonsToAdd": ["drawrect"],
+                        "toImageButtonOptions": {
+                            "format": "png",
+                            "filename": result["filename"],
+                            "scale": 2,
+                        },
+                    })
+    st.caption("💡 Dùng chuột để zoom (cuộn) / pan (kéo). Nút 🏠 trên toolbar để reset view. "
+               "Bấm vào legend để ẩn/hiện lớp xã.")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -477,7 +609,8 @@ def page_tong_quan():
 
 
 def page_du_bao():
-    st.markdown('<div class="module-header">🔄 Dự báo khí hậu mùa</div>', unsafe_allow_html=True)
+    st.markdown('<div class="module-header">🔄 Dự báo khí hậu mùa</div>',
+                unsafe_allow_html=True)
 
     with st.spinner("⏳ Đang tải shapefile …"):
         gdf_all_tinh, gdf_tinh_qn, gdf_xa = load_shapefiles()
@@ -494,7 +627,7 @@ def page_du_bao():
     periods_desc = list(reversed(periods))
     yr_mo_labels = [f"{p[:4]}/{p[4:]}" for p in periods_desc]
 
-    col1, col2 = st.columns([2, 2])
+    col1, col2, col3 = st.columns([2, 2, 2])
     with col1:
         sel_idx = st.selectbox(
             "📅 Kỳ dự báo:", range(len(periods_desc)),
@@ -519,48 +652,71 @@ def page_du_bao():
             help="3 tháng tiếp theo sau kỳ phát bản tin"
         )
 
+    with col3:
+        # Toggle bật/tắt lớp xã
+        show_xa = st.toggle(
+            "🗺️ Hiển thị lớp xã",
+            value=False,
+            help="Bật để xem ranh giới và tên các xã trong vùng nghiên cứu"
+        )
+
     st.markdown("---")
 
-    tab_c, tab_e = st.tabs(["🌡️ Chuẩn sai dự báo khí hậu", "⚠️ Chuẩn sai dự báo cực đoan"])
+    tab_c, tab_e = st.tabs([
+        "🌡️ Chuẩn sai dự báo khí hậu",
+        "⚠️ Chuẩn sai dự báo cực đoan"
+    ])
 
     with tab_c:
-        sel_c = st.selectbox("Chọn biến:", list(CLIMATE_VARS.keys()),
-                             format_func=lambda k: CLIMATE_VARS[k]["label"],
-                             key="sel_c")
+        sel_c = st.selectbox(
+            "Chọn biến:", list(CLIMATE_VARS.keys()),
+            format_func=lambda k: CLIMATE_VARS[k]["label"],
+            key="sel_c"
+        )
         if st.button("🗺️ Vẽ bản đồ", key="btn_c", type="primary"):
-            render_var_panel(sel_c, CLIMATE_VARS[sel_c], sel_period, month_idx,
-                             gdf_all_tinh, gdf_tinh_qn, gdf_xa,
-                             month_labels, state_key="map_c")
+            render_var_panel(
+                sel_c, CLIMATE_VARS[sel_c], sel_period, month_idx,
+                gdf_all_tinh, gdf_tinh_qn, gdf_xa,
+                month_labels, state_key="map_c", show_xa=show_xa,
+            )
         display_panel("map_c")
 
     with tab_e:
-        sel_e = st.selectbox("Chọn biến:", list(EXTREME_VARS.keys()),
-                             format_func=lambda k: EXTREME_VARS[k]["label"],
-                             key="sel_e")
+        sel_e = st.selectbox(
+            "Chọn biến:", list(EXTREME_VARS.keys()),
+            format_func=lambda k: EXTREME_VARS[k]["label"],
+            key="sel_e"
+        )
         if st.button("🗺️ Vẽ bản đồ", key="btn_e", type="primary"):
-            render_var_panel(sel_e, EXTREME_VARS[sel_e], sel_period, month_idx,
-                             gdf_all_tinh, gdf_tinh_qn, gdf_xa,
-                             month_labels, state_key="map_e")
+            render_var_panel(
+                sel_e, EXTREME_VARS[sel_e], sel_period, month_idx,
+                gdf_all_tinh, gdf_tinh_qn, gdf_xa,
+                month_labels, state_key="map_e", show_xa=show_xa,
+            )
         display_panel("map_e")
 
 
 def page_ban_tin_xa():
-    st.markdown('<div class="module-header">📋 Bản tin cảnh báo rủi ro khí hậu</div>', unsafe_allow_html=True)
+    st.markdown('<div class="module-header">📋 Bản tin cảnh báo rủi ro khí hậu</div>',
+                unsafe_allow_html=True)
     st.info("Module đang phát triển.")
 
 
 def page_ban_tin_da_luu():
-    st.markdown('<div class="module-header">💾 Bản tin đã lưu</div>', unsafe_allow_html=True)
+    st.markdown('<div class="module-header">💾 Bản tin đã lưu</div>',
+                unsafe_allow_html=True)
     st.info("Module đang phát triển.")
 
 
 def page_export():
-    st.markdown('<div class="module-header">📤 Export bản tin</div>', unsafe_allow_html=True)
+    st.markdown('<div class="module-header">📤 Export bản tin</div>',
+                unsafe_allow_html=True)
     st.info("Module đang phát triển.")
 
 
 def page_phan_hoi():
-    st.markdown('<div class="module-header">💬 Phản hồi</div>', unsafe_allow_html=True)
+    st.markdown('<div class="module-header">💬 Phản hồi</div>',
+                unsafe_allow_html=True)
     st.info("Module đang phát triển.")
 
 
@@ -583,7 +739,7 @@ with st.sidebar:
     st.markdown("Phòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu")
     st.markdown("Viện Khoa học Khí tượng Thủy văn Môi trường và Biển")
     st.markdown("---")
-    st.markdown("*Phiên bản 1.0.3 – 06/2026*")
+    st.markdown("*Phiên bản 1.1.0 – 06/2026*")
 
 # ── Router ──
 if   menu == "🏠 Tổng quan":                          page_tong_quan()
