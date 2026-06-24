@@ -245,11 +245,11 @@ def idw_knn(xi, yi, zi, query_xy, k=12, power=3.0, eps=1e-12):
 
 
 def interpolate_and_plot(lons, lats, vals, meta: dict, title: str,
-                         gdf_tinh_qn, gdf_xa,
-                         show_tinh: bool, show_xa: bool, show_xa_label: bool):
+                         gdf_tinh_qn, gdf_xa):
     """
     Nội suy IDW → (folium.Map, matplotlib.Figure, err_str).
-    Lớp ranh giới và nhãn xã được kiểm soát qua show_tinh / show_xa / show_xa_label.
+    Các lớp ranh giới luôn được thêm vào bản đồ Folium;
+    người dùng bật/tắt trực tiếp qua LayerControl trong bản đồ.
     """
     # Xác định bbox từ shapefile xã (ưu tiên) hoặc tỉnh hoặc fallback
     ref_gdf = gdf_xa if (gdf_xa is not None and not gdf_xa.empty) else gdf_tinh_qn
@@ -308,56 +308,60 @@ def interpolate_and_plot(lons, lats, vals, meta: dict, title: str,
         opacity=0.80, name="🎨 Lớp nội suy", interactive=False
     ).add_to(m)
 
-    # Lớp ranh giới tỉnh Quảng Ninh
-    if show_tinh and gdf_tinh_qn is not None and not gdf_tinh_qn.empty:
-        folium.GeoJson(
-            gdf_tinh_qn,
-            name="🏛️ Ranh giới tỉnh",
-            style_function=lambda x: {
-                "fillColor": "transparent", "color": "#1a1a1a", "weight": 2.0
-            }
-        ).add_to(m)
-
-    # Lớp ranh giới xã
-    if show_xa and gdf_xa is not None and not gdf_xa.empty:
-        folium.GeoJson(
-            gdf_xa,
-            name="🏘️ Ranh giới xã",
-            style_function=lambda x: {
-                "fillColor": "transparent", "color": "#444444", "weight": 1.0, "dashArray": "4 2"
-            }
-        ).add_to(m)
-
-    # Nhãn tên xã
-    if show_xa_label and gdf_xa is not None and not gdf_xa.empty:
-        # Tìm cột tên xã
-        xa_name_col = None
+    # Tìm cột tên xã (dùng cho cả Folium lẫn matplotlib)
+    xa_name_col = None
+    if gdf_xa is not None and not gdf_xa.empty:
         for col in gdf_xa.columns:
             if col.upper() in ("TEN_XA", "TENXA", "XA", "NAME", "TEN"):
                 xa_name_col = col
                 break
-        if xa_name_col is None and len(gdf_xa.columns) > 1:
-            # Thử cột đầu tiên không phải geometry
+        if xa_name_col is None:
             for col in gdf_xa.columns:
                 if col.lower() != "geometry":
                     xa_name_col = col
                     break
 
-        if xa_name_col:
-            for _, row in gdf_xa.iterrows():
-                try:
-                    centroid = row.geometry.centroid
-                    folium.Marker(
-                        location=[centroid.y, centroid.x],
-                        icon=folium.DivIcon(
-                            html=f'<div style="font-size:8px;color:#111;font-weight:600;'
-                                 f'white-space:nowrap;text-shadow:1px 1px 2px #fff,-1px -1px 2px #fff">'
-                                 f'{row[xa_name_col]}</div>',
-                            icon_size=(120, 20), icon_anchor=(60, 10)
-                        )
-                    ).add_to(m)
-                except Exception:
-                    pass
+    # Lớp ranh giới tỉnh Quảng Ninh (mặc định bật, tắt được qua LayerControl)
+    if gdf_tinh_qn is not None and not gdf_tinh_qn.empty:
+        folium.GeoJson(
+            gdf_tinh_qn,
+            name="🏛️ Ranh giới tỉnh",
+            show=True,
+            style_function=lambda x: {
+                "fillColor": "transparent", "color": "#1a1a1a", "weight": 2.0
+            }
+        ).add_to(m)
+
+    # Lớp ranh giới xã (mặc định bật, tắt được qua LayerControl)
+    if gdf_xa is not None and not gdf_xa.empty:
+        folium.GeoJson(
+            gdf_xa,
+            name="🏘️ Ranh giới xã",
+            show=True,
+            style_function=lambda x: {
+                "fillColor": "transparent", "color": "#444444", "weight": 1.0, "dashArray": "4 2"
+            }
+        ).add_to(m)
+
+    # Lớp nhãn tên xã — đặt trong FeatureGroup để bật/tắt được qua LayerControl
+    # Mặc định tắt; người dùng bật khi cần
+    if gdf_xa is not None and not gdf_xa.empty and xa_name_col:
+        label_group = folium.FeatureGroup(name="🔤 Tên xã", show=False)
+        for _, row in gdf_xa.iterrows():
+            try:
+                centroid = row.geometry.centroid
+                folium.Marker(
+                    location=[centroid.y, centroid.x],
+                    icon=folium.DivIcon(
+                        html=f'<div style="font-size:8px;color:#111;font-weight:600;'
+                             f'white-space:nowrap;text-shadow:1px 1px 2px #fff,-1px -1px 2px #fff">'
+                             f'{row[xa_name_col]}</div>',
+                        icon_size=(120, 20), icon_anchor=(60, 10)
+                    )
+                ).add_to(label_group)
+            except Exception:
+                pass
+        label_group.add_to(m)
 
     cm.StepColormap(
         colors=[mcolors.to_hex(cmap(norm(v))) for v in levels[:-1]],
@@ -371,11 +375,11 @@ def interpolate_and_plot(lons, lats, vals, meta: dict, title: str,
     ax.set_title(title, fontsize=12, fontweight="bold", pad=10)
     im = ax.imshow(gv, extent=[minx, maxx, miny, maxy],
                    cmap=cmap, norm=norm, interpolation="bilinear", origin="lower")
-    if show_tinh and gdf_tinh_qn is not None and not gdf_tinh_qn.empty:
+    if gdf_tinh_qn is not None and not gdf_tinh_qn.empty:
         gdf_tinh_qn.boundary.plot(ax=ax, edgecolor="#1a1a1a", linewidth=1.5)
-    if show_xa and gdf_xa is not None and not gdf_xa.empty:
+    if gdf_xa is not None and not gdf_xa.empty:
         gdf_xa.boundary.plot(ax=ax, edgecolor="#555555", linewidth=0.7, linestyle="--")
-    if show_xa_label and gdf_xa is not None and not gdf_xa.empty and xa_name_col:
+    if gdf_xa is not None and not gdf_xa.empty and xa_name_col:
         for _, row in gdf_xa.iterrows():
             try:
                 c = row.geometry.centroid
@@ -395,8 +399,7 @@ def interpolate_and_plot(lons, lats, vals, meta: dict, title: str,
     return m, fig, None
 
 
-def render_var_panel(var_prefix, meta, period, month_idx, gdf_tinh_qn, gdf_xa, month_labels,
-                     show_tinh, show_xa, show_xa_label):
+def render_var_panel(var_prefix, meta, period, month_idx, gdf_tinh_qn, gdf_xa, month_labels):
     """Tải → nội suy → hiển thị bản đồ cho 1 biến."""
     with st.spinner(f"⏳ Đang tải {meta['label']} …"):
         nc_bytes = download_nc(period, var_prefix)
@@ -416,8 +419,7 @@ def render_var_panel(var_prefix, meta, period, month_idx, gdf_tinh_qn, gdf_xa, m
     with st.spinner("🗺️ Đang vẽ bản đồ …"):
         fmap, fig, err2 = interpolate_and_plot(
             lons, lats, vals, meta, title,
-            gdf_tinh_qn, gdf_xa,
-            show_tinh, show_xa, show_xa_label
+            gdf_tinh_qn, gdf_xa
         )
     if err2:
         st.error(f"❌ {err2}")
@@ -498,16 +500,6 @@ def page_du_bao():
             help="3 tháng tiếp theo sau kỳ phát bản tin"
         )
 
-    # ── Bộ điều khiển lớp ranh giới ──
-    st.markdown("**🗂️ Hiển thị lớp bản đồ:**")
-    lc1, lc2, lc3 = st.columns(3)
-    with lc1:
-        show_tinh     = st.checkbox("🏛️ Ranh giới tỉnh Quảng Ninh", value=True)
-    with lc2:
-        show_xa       = st.checkbox("🏘️ Ranh giới xã",               value=True)
-    with lc3:
-        show_xa_label = st.checkbox("🔤 Tên xã",                       value=False)
-
     st.markdown("---")
 
     # ── 2 tab con ──
@@ -519,8 +511,7 @@ def page_du_bao():
                              key="sel_c")
         if st.button("🗺️ Vẽ bản đồ", key="btn_c", type="primary"):
             render_var_panel(sel_c, CLIMATE_VARS[sel_c], sel_period, month_idx,
-                             gdf_tinh_qn, gdf_xa, month_labels,
-                             show_tinh, show_xa, show_xa_label)
+                             gdf_tinh_qn, gdf_xa, month_labels)
 
     with tab_e:
         sel_e = st.selectbox("Chọn biến:", list(EXTREME_VARS.keys()),
@@ -528,8 +519,7 @@ def page_du_bao():
                              key="sel_e")
         if st.button("🗺️ Vẽ bản đồ", key="btn_e", type="primary"):
             render_var_panel(sel_e, EXTREME_VARS[sel_e], sel_period, month_idx,
-                             gdf_tinh_qn, gdf_xa, month_labels,
-                             show_tinh, show_xa, show_xa_label)
+                             gdf_tinh_qn, gdf_xa, month_labels)
 
 
 def page_ban_tin_xa():
