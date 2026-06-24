@@ -12,3 +12,4 @@ xarray
 folium
 streamlit-folium
 branca
+plotly
