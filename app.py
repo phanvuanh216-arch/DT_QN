@@ -426,11 +426,11 @@ def interpolate_and_plot_plotly(lons, lats, vals, meta: dict, title: str,
     # ── 7. Xây dựng figure Plotly ───────────────────────────────────────────
     fig = go.Figure()
 
-    # 7a. Nền xám các tỉnh lân cận
+    # 7a. Viền các tỉnh lân cận (bỏ fill xám, chỉ giữ đường viền mỏng)
     if gdf_all_tinh is not None and not gdf_all_tinh.empty:
-        for tr in gdf_to_plotly_fill(gdf_all_tinh,
-                                      fillcolor="rgba(210,218,226,0.85)",
-                                      line_color="#aab0b8", line_width=0.5):
+        for tr in gdf_boundary_to_plotly(gdf_all_tinh,
+                                          line_color="#aab0b8", line_width=0.5,
+                                          name="", show_legend=False):
             fig.add_trace(tr)
 
     # 7b. Filled contour nội suy (toàn tỉnh Quảng Ninh)
