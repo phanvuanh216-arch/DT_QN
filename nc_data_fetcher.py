@@ -281,3 +281,89 @@ def mask_raster_theo_tinh(lon: np.ndarray, lat: np.ndarray, data: np.ndarray) ->
     lon2d, lat2d = np.meshgrid(lon, lat)
     mask = shapely.contains_xy(geom, lon2d, lat2d)
     return np.where(mask, data, np.nan)
+
+
+# ─── 7. Nội suy IDW (k-NN) + làm mịn Gaussian – để lưới hiển thị mịn hơn ───
+# Cùng phương pháp với hàm idw_knn() trong app nội suy quan trắc (k-NN nghịch đảo
+# khoảng cách qua cKDTree), áp dụng cho lưới mô hình chuẩn sai khí hậu mùa.
+def _idw_knn(xi: np.ndarray, yi: np.ndarray, zi: np.ndarray, query_xy: np.ndarray,
+             k: int = 12, power: float = 3.0, eps: float = 1e-12) -> np.ndarray:
+    """Nội suy nghịch đảo khoảng cách (IDW) dựa trên k láng giềng gần nhất (k-NN)."""
+    from scipy.spatial import cKDTree
+
+    tree = cKDTree(np.column_stack([xi, yi]))
+    dists, idxs = tree.query(query_xy, k=min(k, xi.size))
+    if dists.ndim == 1:
+        dists, idxs = dists[:, None], idxs[:, None]
+
+    exact = dists <= eps
+    out = np.empty(dists.shape[0], dtype=float)
+    if np.any(exact):
+        for r in np.where(exact.any(axis=1))[0]:
+            out[r] = zi[idxs[r, np.where(exact[r])[0][0]]]
+    rest = ~exact.any(axis=1)
+    if np.any(rest):
+        d, nn = dists[rest], idxs[rest]
+        w = 1.0 / np.maximum(d, eps) ** power
+        out[rest] = (w * zi[nn]).sum(axis=1) / w.sum(axis=1)
+    return out
+
+
+def noi_suy_idw_luoi_min(
+    lon: np.ndarray,
+    lat: np.ndarray,
+    data: np.ndarray,
+    grid_n: int = 400,
+    k: int = 12,
+    power: float = 3.0,
+    sigma: float = 1.2,
+) -> dict:
+    """
+    Nội suy dữ liệu raster gốc (lưới thô của mô hình) sang lưới mịn hơn bằng IDW (k-NN)
+    rồi làm mịn thêm bằng Gaussian filter — giúp bản đồ hiển thị mượt, không bị "rỗ" theo
+    từng ô lưới mô hình.
+
+    Tham số:
+        lon, lat : tọa độ 1D của lưới gốc (như trả về từ doc_du_lieu_raster)
+        data     : mảng 2D (lat, lon) giá trị tương ứng, NaN = missing/ngoài vùng
+        grid_n   : số điểm lưới mịn theo mỗi chiều (lưới đầu ra grid_n × grid_n)
+        k        : số láng giềng gần nhất dùng trong nội suy IDW
+        power    : hệ số mũ nghịch đảo khoảng cách (càng lớn, ảnh hưởng điểm gần
+                   biên độ áp đảo điểm xa)
+        sigma    : độ lệch chuẩn Gaussian dùng làm mịn thêm sau nội suy (0 = bỏ qua)
+
+    Trả về dict {
+        'lon': np.ndarray 1D (lưới mịn),
+        'lat': np.ndarray 1D (lưới mịn),
+        'data': np.ndarray 2D (lưới mịn) đã nội suy + làm mịn,
+    }
+    """
+    from scipy.ndimage import gaussian_filter
+
+    lon2d, lat2d = np.meshgrid(lon, lat)
+    valid = ~np.isnan(data)
+
+    xi = lon2d[valid]
+    yi = lat2d[valid]
+    zi = data[valid]
+
+    if xi.size == 0:
+        # Không có điểm hợp lệ nào -> trả về lưới mịn toàn NaN, tránh lỗi cKDTree với mảng rỗng
+        lon_fine = np.linspace(lon.min(), lon.max(), grid_n)
+        lat_fine = np.linspace(lat.min(), lat.max(), grid_n)
+        return {
+            "lon": lon_fine,
+            "lat": lat_fine,
+            "data": np.full((grid_n, grid_n), np.nan),
+        }
+
+    lon_fine = np.linspace(lon.min(), lon.max(), grid_n)
+    lat_fine = np.linspace(lat.min(), lat.max(), grid_n)
+    gx, gy = np.meshgrid(lon_fine, lat_fine)
+    grid_xy = np.column_stack([gx.ravel(), gy.ravel()])
+
+    gv = _idw_knn(xi, yi, zi, grid_xy, k=k, power=power).reshape(gx.shape)
+    if sigma > 0:
+        gv = gaussian_filter(gv, sigma=sigma)
+
+    return {"lon": lon_fine, "lat": lat_fine, "data": gv}
