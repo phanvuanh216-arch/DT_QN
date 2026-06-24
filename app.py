@@ -1,283 +1,310 @@
 """
-utils/nc_data_fetcher.py
-Tải & xử lý dữ liệu chuẩn sai khí hậu mùa (.nc) từ server nội bộ:
-    http://222.254.32.10/forecast/Detai_QuangNinh/domain_d02/
-
-Cấu trúc trên server:
-    domain_d02/
-        202211/   202212/   ...   202606/      <- thư mục đặt tên YYYYMM (kỳ chạy mô hình)
-            ano.T2m.<YYYYMM>.nc
-            ano.Tx.<YYYYMM>.nc
-            ano.Tm.<YYYYMM>.nc
-            ano.R.<YYYYMM>.nc
-            ano.RH2m.<YYYYMM>.nc
-            ano.CDD.<YYYYMM>.nc
-            ano.CWD.<YYYYMM>.nc
-            ano.Evap.<YYYYMM>.nc
-            ano.FD13.<YYYYMM>.nc
-            ano.FD15.<YYYYMM>.nc
-            ano.Rx1day.<YYYYMM>.nc
-            ano.Rx5day.<YYYYMM>.nc
-            ano.SU35.<YYYYMM>.nc
-            ano.SU37.<YYYYMM>.nc
-            ano.SU39.<YYYYMM>.nc
-
-Mỗi file .nc có 6 timestep (hạn dự báo tháng 1 -> tháng 6 kể từ kỳ chạy),
-nhưng ứng dụng chỉ dùng 3 timestep đầu (hạn dự báo tới 3 tháng) theo yêu cầu nghiệp vụ.
-
-Lưu ý: dùng netCDF4 thuần (đã có sẵn trong requirements.txt) để đọc file .nc
-trực tiếp từ bytes trong RAM (tham số memory=...), không cần cài thêm xarray/h5netcdf.
+modules/du_bao_tu_dong.py
+Module DỰ BÁO TỰ ĐỘNG – tải và hiển thị dữ liệu dự báo từ server
 """
-from __future__ import annotations
-
-import re
-
-import numpy as np
-import requests
 import streamlit as st
-import netCDF4 as nc
+import pandas as pd
+import numpy as np
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+
+from utils.data_fetcher import XA_LIST, KY_THANG, load_data_for_xa, DOI_TUONG
+from utils.nc_data_fetcher import (
+    NHOM_KHI_HAU,
+    NHOM_CUC_DOAN,
+    lay_danh_sach_ky_chay,
+    sinh_nhan_han_du_bao,
+    dinh_dang_ky_chay,
+    doc_du_lieu_raster,
+    mask_raster_theo_tinh,
+    doc_shapefile_xa,
+    doc_ranh_gioi_tinh,
+)
 
 
-BASE_URL = "http://222.254.32.10/forecast/Detai_QuangNinh/domain_d02/"
-HAN_DU_BAO_MAX = 3  # chỉ dùng tới hạn dự báo 3 tháng (yêu cầu nghiệp vụ)
-TIMEOUT_LIST = 15
-TIMEOUT_FILE = 60
+def render():
+    """Điểm vào chính của module – giữ nguyên module con cũ (mock theo xã)
+    và bổ sung thêm module con mới đọc dữ liệu NetCDF thật từ server, dưới dạng 2 tab."""
+    tab_xa, tab_netcdf = st.tabs(
+        ["🏘️ Dự báo theo xã (mô phỏng)", "🌍 Dự báo khí hậu mùa (dữ liệu NetCDF)"]
+    )
 
-SHAPEFILE_XA = "shp/QN_XA_FINAL.shp"
-SHAPEFILE_TINH = "shp/RG_34TINH.dbf"
-TEN_TINH = "Quảng Ninh"
+    with tab_xa:
+        _render_du_bao_theo_xa()
 
-# ─── Định nghĩa 2 nhóm biến ─────────────────────────────────────────────────
-NHOM_KHI_HAU = {
-    "T2m": {"ten": "Nhiệt độ trung bình (T2m)", "don_vi": "°C", "cmap": "RdBu_r"},
-    "Tx": {"ten": "Nhiệt độ tối cao (Tx)", "don_vi": "°C", "cmap": "RdBu_r"},
-    "Tm": {"ten": "Nhiệt độ tối thấp (Tm)", "don_vi": "°C", "cmap": "RdBu_r"},
-    "R": {"ten": "Lượng mưa (R)", "don_vi": "mm", "cmap": "BrBG"},
-    "RH2m": {"ten": "Độ ẩm tương đối (RH2m)", "don_vi": "%", "cmap": "BrBG"},
-}
-
-NHOM_CUC_DOAN = {
-    "CDD": {"ten": "Số ngày khô liên tục (CDD)", "don_vi": "ngày", "cmap": "BrBG"},
-    "CWD": {"ten": "Số ngày ẩm liên tục (CWD)", "don_vi": "ngày", "cmap": "BrBG_r"},
-    "Evap": {"ten": "Lượng bốc hơi (Evap)", "don_vi": "mm", "cmap": "BrBG"},
-    "FD13": {"ten": "Số ngày rét hại < 13°C (FD13)", "don_vi": "ngày", "cmap": "RdBu"},
-    "FD15": {"ten": "Số ngày rét < 15°C (FD15)", "don_vi": "ngày", "cmap": "RdBu"},
-    "Rx1day": {"ten": "Lượng mưa lớn nhất 1 ngày (Rx1day)", "don_vi": "mm", "cmap": "BrBG"},
-    "Rx5day": {"ten": "Lượng mưa lớn nhất 5 ngày (Rx5day)", "don_vi": "mm", "cmap": "BrBG"},
-    "SU35": {"ten": "Số ngày nắng nóng > 35°C (SU35)", "don_vi": "ngày", "cmap": "RdBu_r"},
-    "SU37": {"ten": "Số ngày nắng nóng > 37°C (SU37)", "don_vi": "ngày", "cmap": "RdBu_r"},
-    "SU39": {"ten": "Số ngày nắng nóng > 39°C (SU39)", "don_vi": "ngày", "cmap": "RdBu_r"},
-}
-
-# Regex khớp directory-listing kiểu Apache mod_autoindex / Nginx autoindex:
-#   <a href="202606/">202606/</a>
-_RE_THU_MUC_YYYYMM = re.compile(r'href=["\']((\d{6})/?)["\']')
+    with tab_netcdf:
+        _render_du_bao_netcdf()
 
 
-# ─── 1. Liệt kê các kỳ chạy (thư mục YYYYMM) có trên server ────────────────
-@st.cache_data(ttl=900, show_spinner=False)
-def lay_danh_sach_ky_chay() -> list[str]:
-    """
-    Parse trang directory-listing tại BASE_URL để lấy danh sách kỳ chạy
-    (thư mục dạng YYYYMM), sắp xếp giảm dần (mới nhất trước).
-    Trả về [] nếu không kết nối được hoặc không parse được thư mục nào.
-    """
-    try:
-        resp = requests.get(BASE_URL, timeout=TIMEOUT_LIST)
-        resp.raise_for_status()
-    except requests.exceptions.RequestException:
-        return []
+def _render_du_bao_theo_xa():
+    """Module con CŨ – giữ nguyên 100% logic ban đầu (dữ liệu mô phỏng theo xã)."""
+    st.markdown('<div class="module-header">🔄 MODULE: Dự báo tự động</div>', unsafe_allow_html=True)
+    st.markdown("""
+    Module này tự động tải dữ liệu dự báo từ máy chủ
+    `http://222.254.32.10/forecast/Detai_QuangNinh/` cho từng xã được chọn.
+    """)
 
-    matches = _RE_THU_MUC_YYYYMM.findall(resp.text)
-    ky_chay_set = set()
-    for _, yyyymm in matches:
-        if 1 <= int(yyyymm[4:6]) <= 12:  # lọc hợp lệ: tháng 01-12
-            ky_chay_set.add(yyyymm)
+    col1, col2, col3 = st.columns([2, 2, 1])
+    with col1:
+        xa_chon = st.selectbox("🏘️ Chọn xã:", XA_LIST, key="db_xa")
+    with col2:
+        doi_tuong_chon = st.multiselect(
+            "🌱 Đối tượng nông nghiệp:",
+            ["Lúa", "Rau", "Lợn", "Gà"],
+            default=["Lúa", "Rau", "Lợn", "Gà"],
+            key="db_doi_tuong",
+        )
+    with col3:
+        tai_lai = st.button("🔄 Tải dữ liệu", use_container_width=True)
 
-    return sorted(ky_chay_set, reverse=True)
+    st.markdown("---")
 
+    # Tải dữ liệu
+    with st.spinner(f"Đang tải dữ liệu cho {xa_chon}..."):
+        data, source = load_data_for_xa(xa_chon)
 
-# ─── 2. Sinh nhãn hạn dự báo (tháng 1 / 2 / 3 kể từ kỳ chạy) ────────────────
-def sinh_nhan_han_du_bao(ky_chay: str) -> list[tuple[int, str]]:
-    """
-    Trả về list (han, nhan_hien_thi) cho hạn dự báo 1..HAN_DU_BAO_MAX tháng kể từ kỳ chạy.
-    Ví dụ ky_chay='202606' -> hạn 1 = 'Tháng 07/2026', hạn 2 = 'Tháng 08/2026', hạn 3 = 'Tháng 09/2026'.
-    `han` (1-based) dùng để chọn timestep tương ứng trong file .nc (timestep 0-based = han - 1).
-    """
-    nam = int(ky_chay[:4])
-    thang = int(ky_chay[4:6])
-    nhan = []
-    for han in range(1, HAN_DU_BAO_MAX + 1):
-        t = thang + han
-        y = nam + (t - 1) // 12
-        m = (t - 1) % 12 + 1
-        nhan.append((han, f"Tháng {m:02d}/{y}"))
-    return nhan
+    st.info(f"**Nguồn:** {source}  |  **Xã:** {xa_chon}  |  **Kỳ dự báo:** Tháng 6 – 8/2026")
 
+    # ── Dự báo tháng ─────────────────────────────────────────────────────────
+    with st.expander("📊 Dự báo xác suất nhiệt độ & lượng mưa", expanded=True):
+        du_bao = data.get("du_bao_thang", {})
+        if du_bao:
+            rows_nhiet = []
+            rows_mua = []
+            for ky in KY_THANG:
+                if ky in du_bao:
+                    nt = du_bao[ky].get("nhiet_do", {})
+                    lm = du_bao[ky].get("luong_mua", {})
+                    rows_nhiet.append({
+                        "Kỳ": ky,
+                        "Thấp hơn (%)": nt.get("thap_hon", ""),
+                        "Xấp xỉ (%)": nt.get("xap_xi", ""),
+                        "Cao hơn (%)": nt.get("cao_hon", ""),
+                    })
+                    rows_mua.append({
+                        "Kỳ": ky,
+                        "Thấp hơn (%)": lm.get("thap_hon", ""),
+                        "Xấp xỉ (%)": lm.get("xap_xi", ""),
+                        "Cao hơn (%)": lm.get("cao_hon", ""),
+                    })
 
-def dinh_dang_ky_chay(ky_chay: str) -> str:
-    """'202606' -> 'Tháng 06/2026' (dùng hiển thị 'thời gian phân tích')."""
-    return f"Tháng {ky_chay[4:6]}/{ky_chay[:4]}"
+            c1, c2 = st.columns(2)
+            with c1:
+                st.markdown("**🌡️ Nhiệt độ trung bình nhiều năm**")
+                df_nt = pd.DataFrame(rows_nhiet).set_index("Kỳ")
+                st.dataframe(df_nt, use_container_width=True)
+            with c2:
+                st.markdown("**🌧️ Lượng mưa trung bình nhiều năm**")
+                df_lm = pd.DataFrame(rows_mua).set_index("Kỳ")
+                st.dataframe(df_lm, use_container_width=True)
 
+    # ── Bảng rủi ro theo đối tượng ────────────────────────────────────────────
+    doi_tuong_map = {"Lúa": "lua", "Rau": "rau", "Lợn": "lon", "Gà": "ga"}
+    rui_ro_data = data.get("rui_ro", {})
 
-# ─── 3. Tải file .nc của 1 biến trong 1 kỳ chạy ─────────────────────────────
-@st.cache_data(ttl=3600, show_spinner=False)
-def tai_file_nc(ky_chay: str, ma_bien: str) -> bytes | None:
-    """Tải file ano.<ma_bien>.<ky_chay>.nc từ server, trả về bytes hoặc None nếu lỗi."""
-    url = f"{BASE_URL}{ky_chay}/ano.{ma_bien}.{ky_chay}.nc"
-    try:
-        resp = requests.get(url, timeout=TIMEOUT_FILE)
-        resp.raise_for_status()
-        return resp.content
-    except requests.exceptions.RequestException:
-        return None
+    for dt_name in doi_tuong_chon:
+        dt_key = doi_tuong_map[dt_name]
+        dt_info = DOI_TUONG[dt_key]
+        icon = dt_info["icon"]
+        color = dt_info["color"]
 
+        with st.expander(f"{icon} Rủi ro {dt_name}", expanded=False):
+            dt_rr = rui_ro_data.get(dt_key, {})
+            if not dt_rr:
+                st.warning("Chưa có dữ liệu rủi ro.")
+                continue
 
-# ─── 4. Đọc dữ liệu raster (lon, lat, mảng giá trị) cho 1 hạn dự báo ───────
-def doc_du_lieu_raster(ky_chay: str, ma_bien: str, han: int) -> dict:
-    """
-    Trả về dict {
-        'lon': np.ndarray (1D),
-        'lat': np.ndarray (1D),
-        'data': np.ndarray 2D (lat, lon) - đã thay missing -> NaN,
-        'thoi_gian_du_bao': str | None  (đã format sẵn, vd '2026-07-15'),
-        'loi': None | str
-    }
-    han: 1..HAN_DU_BAO_MAX (hạn dự báo tính theo tháng kể từ kỳ chạy)
-    """
-    raw = tai_file_nc(ky_chay, ma_bien)
-    if raw is None:
-        return {"loi": (
-            f"Không tải được file ano.{ma_bien}.{ky_chay}.nc từ server. "
-            f"Kiểm tra kết nối tới {BASE_URL}{ky_chay}/ hoặc tên file/biến."
-        )}
+            if dt_key == "rau":
+                for loai_key, loai_info in dt_info["loai_rau"].items():
+                    st.markdown(f"**{loai_info['name']}**")
+                    loai_rr = dt_rr.get(loai_key, {})
+                    _render_risk_table(loai_rr, KY_THANG, loai_info.get("chu_ky", {}))
+            else:
+                chu_ky = dt_info.get("chu_ky", {})
+                _render_risk_table(dt_rr, KY_THANG, chu_ky)
 
-    try:
-        ds = nc.Dataset(f"inmemory_{ky_chay}_{ma_bien}.nc", memory=raw)
-    except Exception as exc:
-        return {"loi": f"Không đọc được file NetCDF (file lỗi hoặc không đúng định dạng): {exc}"}
-
-    try:
-        bien_ten = ma_bien if ma_bien in ds.variables else None
-        if bien_ten is None:
-            ung_vien = [v for v in ds.variables if v not in ("lon", "lat", "time", "longitude", "latitude")]
-            if not ung_vien:
-                return {"loi": f"Không tìm thấy biến '{ma_bien}' trong file NetCDF."}
-            bien_ten = ung_vien[0]
-
-        var = ds.variables[bien_ten]
-
-        ts_index = han - 1  # 0-based
-        n_time = var.shape[0] if "time" in var.dimensions else 1
-        if ts_index >= n_time:
-            return {"loi": f"File chỉ có {n_time} hạn dự báo, không có hạn thứ {han}."}
-
-        lat_name = "lat" if "lat" in ds.variables else ("latitude" if "latitude" in ds.variables else None)
-        lon_name = "lon" if "lon" in ds.variables else ("longitude" if "longitude" in ds.variables else None)
-        if lat_name is None or lon_name is None:
-            return {"loi": "Không tìm thấy biến tọa độ lat/lon trong file NetCDF."}
-
-        if "time" in var.dimensions:
-            gia_tri = np.asarray(var[ts_index, :, :], dtype="float64")
-        else:
-            gia_tri = np.asarray(var[:, :], dtype="float64")
-
-        if np.ma.is_masked(gia_tri) or isinstance(gia_tri, np.ma.MaskedArray):
-            mask = np.ma.getmaskarray(gia_tri)
-            gia_tri = np.ma.filled(gia_tri, np.nan)
-            gia_tri[mask] = np.nan
-
-        # Phòng trường hợp giá trị fill không được netCDF4 tự nhận làm mask
-        # (ví dụ thiếu khai báo chuẩn _FillValue): áp dụng ngưỡng an toàn dựa trên
-        # quan sát thực tế (ảnh "cdo infon" cho thấy Minimum không xuống tới -9000).
-        gia_tri = np.where(gia_tri <= -9000, np.nan, gia_tri)
-        gia_tri = np.where(np.abs(gia_tri) > 1e6, np.nan, gia_tri)
-
-        lat_vals = np.asarray(ds.variables[lat_name][:], dtype="float64")
-        lon_vals = np.asarray(ds.variables[lon_name][:], dtype="float64")
-
-        thoi_gian_str = None
-        if "time" in ds.variables:
-            try:
-                time_var = ds.variables["time"]
-                cf_date = nc.num2date(
-                    time_var[ts_index],
-                    units=time_var.units,
-                    calendar=getattr(time_var, "calendar", "standard"),
-                )
-                thoi_gian_str = cf_date.strftime("%Y-%m-%d")
-            except Exception:
-                thoi_gian_str = None
-
-        return {
-            "lon": lon_vals,
-            "lat": lat_vals,
-            "data": gia_tri,
-            "thoi_gian_du_bao": thoi_gian_str,
-            "loi": None,
-        }
-    finally:
-        ds.close()
+    # ── Lưu vào session ───────────────────────────────────────────────────────
+    if st.button("💾 Lưu dữ liệu này vào Session", key="db_save"):
+        if "forecast_cache" not in st.session_state:
+            st.session_state["forecast_cache"] = {}
+        st.session_state["forecast_cache"][xa_chon] = data
+        st.success(f"✅ Đã lưu dữ liệu dự báo cho **{xa_chon}** vào session.")
 
 
-# ─── 5. Shapefile ranh giới (cache để không đọc lại mỗi lần) ───────────────
+def _render_risk_table(rr_dict: dict, ky_list: list, chu_ky: dict):
+    """Render bảng rủi ro màu sắc theo cấp."""
+    from utils.data_fetcher import RISK_LABELS, RISK_COLORS, RISK_TEXT_COLORS
+
+    if not rr_dict:
+        st.caption("Không có dữ liệu.")
+        return
+
+    rows = []
+    if chu_ky:
+        rows.append({"Chỉ tiêu": "Chu kỳ sinh trưởng", **{ky: chu_ky.get(ky, "") for ky in ky_list}})
+
+    for indicator, ky_vals in rr_dict.items():
+        rows.append({"Chỉ tiêu": indicator, **{ky: ky_vals.get(ky, 0) for ky in ky_list}})
+
+    df = pd.DataFrame(rows).set_index("Chỉ tiêu")
+
+    def color_cell(val):
+        if isinstance(val, int):
+            bg = RISK_COLORS.get(val, "#fff")
+            fg = RISK_TEXT_COLORS.get(val, "#333")
+            label = RISK_LABELS.get(val, "")
+            return f"background-color: {bg}; color: {fg}; font-weight: bold;"
+        return ""
+
+    styled = df.style.map(color_cell, subset=ky_list)
+    st.dataframe(styled, use_container_width=True, height=min(250, 50 + 35 * len(rows)))
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# MODULE CON MỚI – Dự báo khí hậu mùa đọc trực tiếp dữ liệu NetCDF (.nc)
+# từ server http://222.254.32.10/forecast/Detai_QuangNinh/domain_d02/
+# Gồm 2 nhóm: Chuẩn sai dự báo khí hậu / Chuẩn sai dự báo cực đoan
+# ═══════════════════════════════════════════════════════════════════════════
+def _render_du_bao_netcdf():
+    st.markdown(
+        '<div class="module-header">🌍 MODULE: Dự báo khí hậu mùa (NetCDF)</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        "Bản đồ chuẩn sai dự báo khí hậu mùa cho tỉnh Quảng Ninh, "
+        "đọc trực tiếp dữ liệu mô hình (.nc) từ máy chủ nội bộ."
+    )
+
+    danh_sach_ky_chay = lay_danh_sach_ky_chay()
+
+    if not danh_sach_ky_chay:
+        st.error(
+            "⚠️ Không kết nối được tới máy chủ dữ liệu "
+            "(`http://222.254.32.10/forecast/Detai_QuangNinh/domain_d02/`) "
+            "hoặc chưa có kỳ chạy nào. Vui lòng kiểm tra kết nối mạng nội bộ tới máy chủ "
+            "hoặc thử lại sau."
+        )
+        return
+
+    tab_khi_hau, tab_cuc_doan = st.tabs(
+        ["🌡️ Chuẩn sai dự báo khí hậu", "🌪️ Chuẩn sai dự báo cực đoan"]
+    )
+
+    with tab_khi_hau:
+        _render_module_con_netcdf(
+            khoa="khihau",
+            nhom_bien=NHOM_KHI_HAU,
+            danh_sach_ky_chay=danh_sach_ky_chay,
+        )
+
+    with tab_cuc_doan:
+        _render_module_con_netcdf(
+            khoa="cucdoan",
+            nhom_bien=NHOM_CUC_DOAN,
+            danh_sach_ky_chay=danh_sach_ky_chay,
+        )
+
+
+def _render_module_con_netcdf(khoa: str, nhom_bien: dict, danh_sach_ky_chay: list[str]):
+    """Render 1 module con NetCDF (dùng chung cho cả 2 tab khí hậu / cực đoan)."""
+
+    col1, col2, col3 = st.columns([1.3, 1.3, 2])
+    with col1:
+        ky_chay = st.selectbox(
+            "📅 Kỳ chạy mô hình:",
+            danh_sach_ky_chay,
+            index=0,  # mới nhất luôn ở đầu danh sách (đã sort giảm dần)
+            format_func=dinh_dang_ky_chay,
+            key=f"{khoa}_ky_chay",
+        )
+    with col2:
+        nhan_han = sinh_nhan_han_du_bao(ky_chay)
+        han_chon = st.selectbox(
+            "⏱️ Hạn dự báo:",
+            options=[h for h, _ in nhan_han],
+            format_func=lambda h: dict(nhan_han)[h],
+            key=f"{khoa}_han",
+        )
+    with col3:
+        ma_bien = st.selectbox(
+            "📊 Biến hiển thị:",
+            options=list(nhom_bien.keys()),
+            format_func=lambda k: nhom_bien[k]["ten"],
+            key=f"{khoa}_bien",
+        )
+
+    st.markdown(
+        f"**🕐 Thời gian phân tích (kỳ chạy mô hình):** {dinh_dang_ky_chay(ky_chay)}  \n"
+        f"**📈 Thời gian dự báo:** {dict(nhan_han)[han_chon]}"
+    )
+
+    with st.spinner(f"Đang tải dữ liệu {ma_bien} từ máy chủ..."):
+        ket_qua = doc_du_lieu_raster(ky_chay, ma_bien, han=han_chon)
+
+    if ket_qua.get("loi"):
+        st.warning(f"⚠️ {ket_qua['loi']}")
+        return
+
+    if ket_qua.get("thoi_gian_du_bao"):
+        st.caption(f"Mốc thời gian trong file dữ liệu: {ket_qua['thoi_gian_du_bao']}")
+
+    info = nhom_bien[ma_bien]
+    fig = _ve_ban_do_netcdf(
+        lon=ket_qua["lon"],
+        lat=ket_qua["lat"],
+        data=ket_qua["data"],
+        ten_bien=info["ten"],
+        don_vi=info["don_vi"],
+        cmap=info["cmap"],
+    )
+    st.pyplot(fig, use_container_width=True)
+    plt.close(fig)
+
+
 @st.cache_resource(show_spinner=False)
-def doc_shapefile_xa():
-    import geopandas as gpd
-    return gpd.read_file(SHAPEFILE_XA)
-
-
-@st.cache_resource(show_spinner=False)
-def doc_ranh_gioi_tinh():
-    """Lấy polygon ranh giới tỉnh Quảng Ninh từ shapefile 34 tỉnh, dùng để mask raster."""
-    import geopandas as gpd
-    gdf = gpd.read_file(SHAPEFILE_TINH)
-    qn = gdf[gdf["ten_tinh"] == TEN_TINH]
-    if qn.empty:
-        return None
-    return qn
-
-
-# ─── 6. Tóm tắt giá trị trung bình theo từng xã (clip theo shapefile) ──────
-def tinh_trung_binh_theo_xa(lon: np.ndarray, lat: np.ndarray, data: np.ndarray):
-    """
-    Trả về GeoDataFrame (bản sao của shapefile xã) có thêm cột 'gia_tri'
-    = trung bình các điểm lưới rơi vào từng xã.
-    """
-    import shapely
-
-    gdf = doc_shapefile_xa().copy()
-    lon2d, lat2d = np.meshgrid(lon, lat)
-    valid = ~np.isnan(data)
-
-    pts_lon = lon2d[valid]
-    pts_lat = lat2d[valid]
-    pts_val = data[valid]
-
-    ket_qua = []
-    for geom in gdf.geometry:
-        if pts_lon.size == 0:
-            ket_qua.append(np.nan)
-            continue
-        trong_xa = shapely.contains_xy(geom, pts_lon, pts_lat)
-        if trong_xa.sum() == 0:
-            ket_qua.append(np.nan)
-        else:
-            ket_qua.append(float(np.mean(pts_val[trong_xa])))
-
-    gdf["gia_tri"] = ket_qua
-    return gdf
-
-
-def mask_raster_theo_tinh(lon: np.ndarray, lat: np.ndarray, data: np.ndarray) -> np.ndarray:
-    """Trả về bản sao của `data` với các điểm nằm ngoài ranh giới tỉnh Quảng Ninh -> NaN."""
-    import shapely
-
+def _bounds_tinh_netcdf():
     qn = doc_ranh_gioi_tinh()
     if qn is None:
-        return data  # không có ranh giới tỉnh -> trả nguyên bản, không mask
+        return None
+    return qn.total_bounds  # [minx, miny, maxx, maxy]
 
-    geom = qn.union_all() if hasattr(qn, "union_all") else qn.unary_union
-    lon2d, lat2d = np.meshgrid(lon, lat)
-    mask = shapely.contains_xy(geom, lon2d, lat2d)
-    return np.where(mask, data, np.nan)
+
+def _ve_ban_do_netcdf(lon: np.ndarray, lat: np.ndarray, data: np.ndarray, ten_bien: str, don_vi: str, cmap: str):
+    """Vẽ bản đồ raster chuẩn sai, mask theo ranh giới tỉnh, phủ ranh giới xã."""
+    data_mask = mask_raster_theo_tinh(lon, lat, data)
+    gdf_xa = doc_shapefile_xa()
+    bounds = _bounds_tinh_netcdf()
+
+    fig, ax = plt.subplots(figsize=(9, 8))
+
+    if np.all(np.isnan(data_mask)):
+        ax.text(0.5, 0.5, "Không có dữ liệu hợp lệ trong phạm vi tỉnh", ha="center", va="center")
+        ax.set_axis_off()
+        return fig
+
+    vmax = np.nanmax(np.abs(data_mask))
+    vmax = vmax if vmax > 0 else 1.0
+    pc = ax.pcolormesh(
+        lon, lat, data_mask,
+        cmap=cmap, vmin=-vmax, vmax=vmax, shading="auto",
+    )
+
+    gdf_xa.boundary.plot(ax=ax, edgecolor="#333333", linewidth=0.4)
+
+    qn = doc_ranh_gioi_tinh()
+    if qn is not None:
+        qn.boundary.plot(ax=ax, edgecolor="black", linewidth=1.3)
+
+    if bounds is not None:
+        pad = 0.05
+        ax.set_xlim(bounds[0] - pad, bounds[2] + pad)
+        ax.set_ylim(bounds[1] - pad, bounds[3] + pad)
+
+    ax.set_axis_off()
+    ax.set_title(f"{ten_bien}", fontsize=13, fontweight="bold")
+    cbar = plt.colorbar(pc, ax=ax, shrink=0.7)
+    cbar.set_label(f"Chuẩn sai ({don_vi})")
+
+    fig.tight_layout()
+    return fig
