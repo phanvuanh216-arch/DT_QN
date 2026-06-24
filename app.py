@@ -399,18 +399,22 @@ def interpolate_and_plot(lons, lats, vals, meta: dict, title: str,
     return m, fig, None
 
 
-def render_var_panel(var_prefix, meta, period, month_idx, gdf_tinh_qn, gdf_xa, month_labels):
-    """Tải → nội suy → hiển thị bản đồ cho 1 biến."""
+def render_var_panel(var_prefix, meta, period, month_idx, gdf_tinh_qn, gdf_xa,
+                     month_labels, state_key: str):
+    """
+    Tải → nội suy → lưu kết quả vào st.session_state[state_key].
+    Hàm display_panel() sẽ đọc và hiển thị — kết quả không biến mất khi re-run.
+    """
     with st.spinner(f"⏳ Đang tải {meta['label']} …"):
         nc_bytes = download_nc(period, var_prefix)
     if nc_bytes is None:
-        st.error(f"❌ Không tải được: `{BASE_URL}{period}/{var_prefix}.{period}.nc`")
+        st.session_state[state_key] = {"error": f"Không tải được file NC: {var_prefix}.{period}.nc"}
         return
 
     with st.spinner("🔄 Đang nội suy …"):
         lons, lats, vals, err = load_nc_data(nc_bytes, month_idx)
     if err:
-        st.error(f"❌ Lỗi đọc dữ liệu: {err}")
+        st.session_state[state_key] = {"error": f"Lỗi đọc dữ liệu: {err}"}
         return
 
     month_str = month_labels[month_idx] if month_idx < len(month_labels) else f"Tháng +{month_idx+1}"
@@ -418,25 +422,46 @@ def render_var_panel(var_prefix, meta, period, month_idx, gdf_tinh_qn, gdf_xa, m
 
     with st.spinner("🗺️ Đang vẽ bản đồ …"):
         fmap, fig, err2 = interpolate_and_plot(
-            lons, lats, vals, meta, title,
-            gdf_tinh_qn, gdf_xa
+            lons, lats, vals, meta, title, gdf_tinh_qn, gdf_xa
         )
     if err2:
-        st.error(f"❌ {err2}")
+        st.session_state[state_key] = {"error": err2}
         return
 
-    st_folium(fmap, width=None, height=520, use_container_width=True)
-
+    # Lưu PNG vào bytes để download
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=120, bbox_inches="tight")
     buf.seek(0)
-    st.download_button(
-        f"⬇️ Tải PNG – {meta['label']}",
-        data=buf.getvalue(),
-        file_name=f"chuan_sai_{var_prefix.replace('.','_')}_{period}_t{month_idx+1}.png",
-        mime="image/png",
-    )
+    png_bytes = buf.getvalue()
     plt.close(fig)
+
+    # Lưu toàn bộ kết quả vào session_state — tồn tại qua các lần re-run
+    st.session_state[state_key] = {
+        "fmap":      fmap,
+        "png_bytes": png_bytes,
+        "title":     title,
+        "label":     meta["label"],
+        "filename":  f"chuan_sai_{var_prefix.replace('.','_')}_{period}_t{month_idx+1}.png",
+        "error":     None,
+    }
+
+
+def display_panel(state_key: str):
+    """Hiển thị bản đồ và nút download từ session_state — luôn hiện dù có re-run."""
+    result = st.session_state.get(state_key)
+    if result is None:
+        return
+    if result.get("error"):
+        st.error(f"❌ {result['error']}")
+        return
+    st_folium(result["fmap"], width=None, height=520, use_container_width=True)
+    st.download_button(
+        f"⬇️ Tải PNG – {result['label']}",
+        data=result["png_bytes"],
+        file_name=result["filename"],
+        mime="image/png",
+        key=f"dl_{state_key}",
+    )
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -511,7 +536,8 @@ def page_du_bao():
                              key="sel_c")
         if st.button("🗺️ Vẽ bản đồ", key="btn_c", type="primary"):
             render_var_panel(sel_c, CLIMATE_VARS[sel_c], sel_period, month_idx,
-                             gdf_tinh_qn, gdf_xa, month_labels)
+                             gdf_tinh_qn, gdf_xa, month_labels, state_key="map_c")
+        display_panel("map_c")
 
     with tab_e:
         sel_e = st.selectbox("Chọn biến:", list(EXTREME_VARS.keys()),
@@ -519,7 +545,8 @@ def page_du_bao():
                              key="sel_e")
         if st.button("🗺️ Vẽ bản đồ", key="btn_e", type="primary"):
             render_var_panel(sel_e, EXTREME_VARS[sel_e], sel_period, month_idx,
-                             gdf_tinh_qn, gdf_xa, month_labels)
+                             gdf_tinh_qn, gdf_xa, month_labels, state_key="map_e")
+        display_panel("map_e")
 
 
 def page_ban_tin_xa():
