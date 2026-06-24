@@ -1,9 +1,10 @@
 streamlit
+pandas
 numpy
-requests
 matplotlib
+requests
 netCDF4
+geopandas
 scipy
 shapely
-pyproj
-geopandas
+openpyxl
