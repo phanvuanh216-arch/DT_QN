@@ -3,3 +3,10 @@ requests>=2.31.0
 pandas>=2.0.0
 python-docx>=1.1.0
 openpyxl>=3.1.0
+numpy
+matplotlib
+openpyxl
+geopandas
+shapely
+folium
+streamlit-folium
