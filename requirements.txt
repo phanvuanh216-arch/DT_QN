@@ -11,3 +11,11 @@ shapely
 folium
 streamlit-folium
 netCDF4
+xarray
+scipy
+openpyxl
+geopandas
+shapely
+pyproj
+fiona
+streamlit-folium
