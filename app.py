@@ -3,7 +3,7 @@
 Ứng dụng Streamlit - Hệ thống Bản tin Khí hậu Nông nghiệp Quảng Ninh
 - Nội suy toàn tỉnh Quảng Ninh (mask theo ranh giới tỉnh)
 - Lớp xã chỉ là overlay bật/tắt để xem vùng nghiên cứu
-- Zoom/pan tương tác qua Plotly
+- Bản đồ cố định (khóa zoom/pan hoàn toàn)
 """
 
 import streamlit as st
@@ -33,10 +33,21 @@ st.set_page_config(
 
 st.markdown("""
 <style>
+    /* ── Kéo sát header trang lên trên cùng ── */
+    .block-container {
+        padding-top: 0.5rem !important;
+        padding-bottom: 1rem !important;
+    }
+    /* Ẩn khoảng trắng mặc định Streamlit chèn trước nội dung */
+    header[data-testid="stHeader"] {
+        height: 0rem !important;
+        min-height: 0rem !important;
+    }
+    /* Kéo sát module-header – giảm margin-bottom */
     .module-header {
         background: linear-gradient(135deg, #1e3a5f 0%, #2d6a4f 100%);
-        color: white; padding: 12px 20px; border-radius: 8px;
-        font-size: 1.1rem; font-weight: bold; margin-bottom: 10px;
+        color: white; padding: 10px 20px; border-radius: 8px;
+        font-size: 1.1rem; font-weight: bold; margin-top: 0; margin-bottom: 8px;
         display: flex; align-items: center; gap: 8px;
     }
     .stTabs [data-baseweb="tab-list"] { gap: 6px; }
@@ -51,6 +62,10 @@ st.markdown("""
         background: linear-gradient(180deg, #1e3a5f 0%, #2d3748 100%);
     }
     [data-testid="stSidebar"] * { color: #e2e8f0 !important; }
+    /* Giảm khoảng cách trên cùng sidebar */
+    [data-testid="stSidebar"] .block-container {
+        padding-top: 1rem !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -347,6 +362,7 @@ def interpolate_and_plot_plotly(lons, lats, vals, meta: dict, title: str,
     """
     - Nội suy IDW trên toàn tỉnh Quảng Ninh (mask = ranh giới tỉnh QN).
     - Lớp xã chỉ là overlay bật/tắt.
+    - Bản đồ cố định: khóa zoom/pan hoàn toàn.
     - Trả về (plotly_figure, err_str).
     """
 
@@ -358,7 +374,7 @@ def interpolate_and_plot_plotly(lons, lats, vals, meta: dict, title: str,
         minx, miny, maxx, maxy = gdf_xa.total_bounds
         mask_shape = gdf_xa.unary_union
     else:
-        minx, miny, maxx, maxy = 106.3, 20.6, 108.3, 21.8
+        minx, miny, maxx, MAxy = 106.3, 20.6, 108.3, 21.8
         mask_shape = None
 
     BUF = 0.12
@@ -418,8 +434,6 @@ def interpolate_and_plot_plotly(lons, lats, vals, meta: dict, title: str,
             fig.add_trace(tr)
 
     # 7b. Filled contour nội suy (toàn tỉnh Quảng Ninh)
-    # Dùng go.Contour thay go.Heatmap để tránh xung đột scaleanchor="y"
-    # NaN được xử lý bằng connectgaps=False → vùng ngoài tỉnh trống
     fig.add_trace(go.Contour(
         z=gv_display,
         x=gx_vec,
@@ -431,11 +445,9 @@ def interpolate_and_plot_plotly(lons, lats, vals, meta: dict, title: str,
         contours=dict(
             start=vmin,
             end=vmax,
-            # size = khoảng cách giữa các band; dùng min-diff giữa các level
-            # để đảm bảo levels không đều vẫn hiển thị đúng
             size=float(np.min(np.diff(levels))) if len(levels) > 1 else 1.0,
-            coloring="fill",      # tô màu vùng
-            showlines=False,      # ẩn đường contour, chỉ giữ màu fill
+            coloring="fill",
+            showlines=False,
         ),
         colorbar=dict(
             title=dict(text=f"Chuẩn sai ({unit})", side="right",
@@ -449,7 +461,7 @@ def interpolate_and_plot_plotly(lons, lats, vals, meta: dict, title: str,
             outlinecolor="#aaa",
         ),
         opacity=0.90,
-        connectgaps=False,        # NaN → không tô màu → pixel ngoài tỉnh trống
+        connectgaps=False,
         hovertemplate=(
             "Lon: %{x:.3f}°E<br>"
             "Lat: %{y:.3f}°N<br>"
@@ -468,9 +480,8 @@ def interpolate_and_plot_plotly(lons, lats, vals, meta: dict, title: str,
                                           show_legend=True):
             fig.add_trace(tr)
 
-    # 7d. Ranh giới & tên xã (overlay bật/tắt qua toggle)
+    # 7d. Ranh giới & tên xã (overlay bật/tắt qua legend)
     if gdf_xa is not None and not gdf_xa.empty:
-        # Tìm cột tên xã
         xa_name_col = None
         for col in gdf_xa.columns:
             if col.upper() in ("TEN_XA", "TENXA", "XA", "NAME", "TEN"):
@@ -484,7 +495,6 @@ def interpolate_and_plot_plotly(lons, lats, vals, meta: dict, title: str,
 
         xa_visible = True if show_xa else "legendonly"
 
-        # Viền xã
         first_xa = True
         for geom in gdf_xa.geometry:
             if geom is None or geom.is_empty:
@@ -504,19 +514,20 @@ def interpolate_and_plot_plotly(lons, lats, vals, meta: dict, title: str,
                 ))
                 first_xa = False
 
-        # Tên xã
         if xa_name_col:
             lbl_trace = gdf_xa_labels_to_plotly(gdf_xa, xa_name_col)
             lbl_trace.visible = xa_visible
             fig.add_trace(lbl_trace)
 
-    # ── 8. Layout ──────────────────────────────────────────────────────────
+    # ── 8. Layout – KHÓA ZOOM/PAN HOÀN TOÀN ────────────────────────────────
     fig.update_layout(
         title=dict(text=title, font=dict(size=14, family="Arial, sans-serif"),
                    x=0.5, xanchor="center"),
         xaxis=dict(
             title="Kinh độ (°E)",
+            # Fix cứng range – không thay đổi khi zoom/pan
             range=[plot_minx, plot_maxx],
+            fixedrange=True,          # ← KHÓA trục X
             tickformat=".2f",
             scaleanchor="y", scaleratio=1,
             constrain="domain",
@@ -525,6 +536,7 @@ def interpolate_and_plot_plotly(lons, lats, vals, meta: dict, title: str,
         yaxis=dict(
             title="Vĩ độ (°N)",
             range=[plot_miny, plot_maxy],
+            fixedrange=True,          # ← KHÓA trục Y
             tickformat=".2f",
             showgrid=True, gridcolor="rgba(180,180,180,0.3)", gridwidth=0.5,
         ),
@@ -534,18 +546,23 @@ def interpolate_and_plot_plotly(lons, lats, vals, meta: dict, title: str,
             bordercolor="#aaa", borderwidth=1,
             font=dict(size=10),
         ),
-        margin=dict(l=60, r=20, t=60, b=50),
+        margin=dict(l=60, r=20, t=50, b=50),
         height=680,
         plot_bgcolor="white",
         paper_bgcolor="white",
         hovermode="closest",
-        dragmode="zoom",   # cho phép zoom bằng chuột kéo
+        # dragmode=False → tắt hoàn toàn kéo thả
+        dragmode=False,
     )
 
-    # Nút zoom/pan/reset trên toolbar
+    # Chỉ giữ nút lưu ảnh, bỏ tất cả nút zoom/pan/select
     fig.update_layout(
-        modebar_add=["zoom", "pan", "zoomIn2d", "zoomOut2d", "resetScale2d"],
-        modebar_remove=["lasso2d", "select2d"],
+        modebar_remove=[
+            "zoom", "pan", "zoomIn2d", "zoomOut2d",
+            "resetScale2d", "lasso2d", "select2d",
+            "autoScale2d", "hoverClosestCartesian",
+            "hoverCompareCartesian", "toggleSpikelines",
+        ],
     )
 
     return fig, None
@@ -599,20 +616,23 @@ def display_panel(state_key: str):
     if result.get("error"):
         st.error(f"❌ {result['error']}")
         return
-    # Hiển thị Plotly chart (có zoom/pan)
+    # Hiển thị Plotly chart – bản đồ cố định, chỉ hover
     st.plotly_chart(result["fig"], use_container_width=True,
                     config={
-                        "scrollZoom": True,       # zoom bằng scroll chuột
+                        "scrollZoom": False,        # tắt zoom bằng scroll
                         "displayModeBar": True,
-                        "modeBarButtonsToAdd": ["drawrect"],
+                        "modeBarButtonsToRemove": [
+                            "zoom2d", "pan2d", "zoomIn2d", "zoomOut2d",
+                            "autoScale2d", "resetScale2d",
+                            "lasso2d", "select2d",
+                        ],
                         "toImageButtonOptions": {
                             "format": "png",
                             "filename": result["filename"],
                             "scale": 2,
                         },
                     })
-    st.caption("💡 Dùng chuột để zoom (cuộn) / pan (kéo). Nút 🏠 trên toolbar để reset view. "
-               "Bấm vào legend để ẩn/hiện lớp xã.")
+    st.caption("💡 Hover vào bản đồ để xem giá trị. Bấm vào legend để ẩn/hiện lớp xã.")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -675,7 +695,6 @@ def page_du_bao():
         )
 
     with col3:
-        # Toggle bật/tắt lớp xã
         show_xa = st.toggle(
             "🗺️ Hiển thị lớp xã",
             value=False,
