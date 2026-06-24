@@ -417,23 +417,45 @@ def interpolate_and_plot_plotly(lons, lats, vals, meta: dict, title: str,
                                       line_color="#aab0b8", line_width=0.5):
             fig.add_trace(tr)
 
-    # 7b. Heatmap nội suy (toàn tỉnh Quảng Ninh)
-    fig.add_trace(go.Heatmap(
+    # 7b. Filled contour nội suy (toàn tỉnh Quảng Ninh)
+    # Dùng go.Contour thay go.Heatmap để tránh xung đột scaleanchor="y"
+    # NaN được xử lý bằng connectgaps=False → vùng ngoài tỉnh trống
+    fig.add_trace(go.Contour(
         z=gv_display,
         x=gx_vec,
         y=gy_vec,
         colorscale=colorscale,
-        zmin=vmin, zmax=vmax,
+        zmin=vmin,
+        zmax=vmax,
+        autocontour=False,
+        contours=dict(
+            start=vmin,
+            end=vmax,
+            # size = khoảng cách giữa các band; dùng min-diff giữa các level
+            # để đảm bảo levels không đều vẫn hiển thị đúng
+            size=float(np.min(np.diff(levels))) if len(levels) > 1 else 1.0,
+            coloring="fill",      # tô màu vùng
+            showlines=False,      # ẩn đường contour, chỉ giữ màu fill
+        ),
         colorbar=dict(
-            title=dict(text=f"Chuẩn sai ({unit})", side="right", font=dict(size=12)),
+            title=dict(text=f"Chuẩn sai ({unit})", side="right",
+                       font=dict(size=12, family="Arial, sans-serif")),
             tickvals=levels,
             ticktext=[str(v) for v in levels],
             tickfont=dict(size=10),
             thickness=16,
             len=0.75,
+            outlinewidth=1,
+            outlinecolor="#aaa",
         ),
-        opacity=0.88,
-        hovertemplate="Lon: %{x:.3f}°E<br>Lat: %{y:.3f}°N<br>Giá trị: %{z:.2f}" + unit + "<extra></extra>",
+        opacity=0.90,
+        connectgaps=False,        # NaN → không tô màu → pixel ngoài tỉnh trống
+        hovertemplate=(
+            "Lon: %{x:.3f}°E<br>"
+            "Lat: %{y:.3f}°N<br>"
+            f"Giá trị: %{{z:.2f}} {unit}"
+            "<extra></extra>"
+        ),
         name="Nội suy",
         showscale=True,
     ))
