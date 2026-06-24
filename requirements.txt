@@ -8,3 +8,7 @@ geopandas
 scipy
 shapely
 openpyxl
+xarray
+folium
+streamlit-folium
+branca
