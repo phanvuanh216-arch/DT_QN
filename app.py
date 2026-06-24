@@ -8,9 +8,7 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import sys
-import os
-sys.path.insert(0, os.path.dirname(__file__))
+
 from utils.data_fetcher import XA_LIST, KY_THANG, load_data_for_xa, DOI_TUONG
 from utils.nc_data_fetcher import (
     NHOM_KHI_HAU,
