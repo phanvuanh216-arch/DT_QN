@@ -61,8 +61,8 @@ st.markdown("""
 # ══════════════════════════════════════════════════════════════════════════════
 # HẰNG SỐ
 # ══════════════════════════════════════════════════════════════════════════════
-BASE_URL   = "http://222.254.32.10/forecast/Detai_QuangNinh/domain_d02/"
-SHP_QN_URL = "https://raw.githubusercontent.com/phanvuanh216-arch/DT_QN/main/shp/"
+BASE_URL    = "http://222.254.32.10/forecast/Detai_QuangNinh/domain_d02/"
+SHP_QN_URL  = "https://raw.githubusercontent.com/phanvuanh216-arch/DT_QN/main/shp/"
 
 CLIMATE_VARS = {
     "ano.T2m":  {"label": "Nhiệt độ trung bình (T2m)", "unit": "°C",  "cmap": "RdBu_r", "levels": list(range(-5, 6))},
@@ -155,29 +155,76 @@ def load_nc_data(nc_bytes: bytes, month_idx: int):
 
 
 @st.cache_resource(show_spinner=False)
-def load_quangninh_shp():
-    """Tải shapefile huyện Quảng Ninh từ GitHub."""
+def load_shapefiles():
+    """
+    Tải shapefile tỉnh (RG_34TINH) và xã vùng nghiên cứu (QN_XA_FINAL) từ GitHub.
+    Lọc vùng Quảng Ninh (mã tỉnh 22) cho shapefile tỉnh.
+    Trả về (gdf_tinh_qn, gdf_xa) hoặc (None, None) nếu lỗi.
+    """
     exts = [".shp", ".dbf", ".shx", ".prj"]
     tmp_dir = tempfile.mkdtemp()
-    try:
+
+    def _download_shp(name):
+        """Tải một bộ shapefile về tmp_dir, trả về đường dẫn .shp hoặc None."""
+        ok = True
         for ext in exts:
-            r = requests.get(SHP_QN_URL + "QN_huyen" + ext, timeout=30)
+            r = requests.get(SHP_QN_URL + name + ext, timeout=30)
             if r.status_code == 200:
-                with open(os.path.join(tmp_dir, "QN_huyen" + ext), "wb") as f:
+                with open(os.path.join(tmp_dir, name + ext), "wb") as f:
                     f.write(r.content)
-        shp_path = os.path.join(tmp_dir, "QN_huyen.shp")
-        if os.path.exists(shp_path):
-            gdf = gpd.read_file(shp_path)
-            if gdf.crs and gdf.crs.to_epsg() != 4326:
-                gdf = gdf.to_crs(epsg=4326)
-            return gdf
+            else:
+                ok = False
+        shp_path = os.path.join(tmp_dir, name + ".shp")
+        return shp_path if ok and os.path.exists(shp_path) else None
+
+    gdf_tinh_qn = None
+    gdf_xa      = None
+
+    try:
+        # ── Ranh giới tỉnh → lọc Quảng Ninh ──
+        path_tinh = _download_shp("RG_34TINH")
+        if path_tinh:
+            gdf_tinh = gpd.read_file(path_tinh)
+            if gdf_tinh.crs and gdf_tinh.crs.to_epsg() != 4326:
+                gdf_tinh = gdf_tinh.to_crs(epsg=4326)
+            # Lọc Quảng Ninh: thử các cột tên tỉnh / mã tỉnh phổ biến
+            cols = [c.upper() for c in gdf_tinh.columns]
+            qn_mask = None
+            for col_raw in gdf_tinh.columns:
+                col_up = col_raw.upper()
+                if col_up in ("TINH", "TEN_TINH", "PROVINCE", "NAME"):
+                    qn_mask = gdf_tinh[col_raw].str.contains("Quảng Ninh|Quang Ninh", case=False, na=False)
+                    break
+                elif col_up in ("MATINH", "MA_TINH", "TINH_CD", "PROVCODE", "MA"):
+                    # Mã tỉnh Quảng Ninh = 22
+                    try:
+                        qn_mask = gdf_tinh[col_raw].astype(str).str.strip() == "22"
+                    except:
+                        pass
+                    break
+            if qn_mask is not None and qn_mask.any():
+                gdf_tinh_qn = gdf_tinh[qn_mask].copy()
+            else:
+                # Nếu không lọc được thì bỏ qua lớp tỉnh
+                gdf_tinh_qn = None
     except Exception:
-        pass
-    return None
+        gdf_tinh_qn = None
+
+    try:
+        # ── Ranh giới xã vùng nghiên cứu ──
+        path_xa = _download_shp("QN_XA_FINAL")
+        if path_xa:
+            gdf_xa = gpd.read_file(path_xa)
+            if gdf_xa.crs and gdf_xa.crs.to_epsg() != 4326:
+                gdf_xa = gdf_xa.to_crs(epsg=4326)
+    except Exception:
+        gdf_xa = None
+
+    return gdf_tinh_qn, gdf_xa
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# HÀM NỘI SUY IDW-KNN (từ ve.py)
+# HÀM NỘI SUY IDW-KNN
 # ══════════════════════════════════════════════════════════════════════════════
 
 def idw_knn(xi, yi, zi, query_xy, k=12, power=3.0, eps=1e-12):
@@ -197,12 +244,19 @@ def idw_knn(xi, yi, zi, query_xy, k=12, power=3.0, eps=1e-12):
     return out
 
 
-def interpolate_and_plot(lons, lats, vals, meta: dict, title: str, shp_gdf):
-    """Nội suy IDW → (folium.Map, matplotlib.Figure, err_str)."""
-    if shp_gdf is not None and not shp_gdf.empty:
-        minx, miny, maxx, maxy = shp_gdf.total_bounds
+def interpolate_and_plot(lons, lats, vals, meta: dict, title: str,
+                         gdf_tinh_qn, gdf_xa,
+                         show_tinh: bool, show_xa: bool, show_xa_label: bool):
+    """
+    Nội suy IDW → (folium.Map, matplotlib.Figure, err_str).
+    Lớp ranh giới và nhãn xã được kiểm soát qua show_tinh / show_xa / show_xa_label.
+    """
+    # Xác định bbox từ shapefile xã (ưu tiên) hoặc tỉnh hoặc fallback
+    ref_gdf = gdf_xa if (gdf_xa is not None and not gdf_xa.empty) else gdf_tinh_qn
+    if ref_gdf is not None and not ref_gdf.empty:
+        minx, miny, maxx, maxy = ref_gdf.total_bounds
         minx -= 0.2; miny -= 0.2; maxx += 0.2; maxy += 0.2
-        shape_union = shp_gdf.unary_union
+        shape_union = ref_gdf.unary_union
     else:
         minx, miny, maxx, maxy = 106.3, 20.6, 108.3, 21.8
         shape_union = None
@@ -222,7 +276,7 @@ def interpolate_and_plot(lons, lats, vals, meta: dict, title: str, shp_gdf):
     if SIGMA > 0:
         gv = gaussian_filter(gv, sigma=SIGMA)
 
-    # Mask ranh giới
+    # Mask ranh giới theo vùng nghiên cứu
     if shape_union is not None:
         prep_s = prep(shape_union)
         mask_flat = np.fromiter(
@@ -232,9 +286,9 @@ def interpolate_and_plot(lons, lats, vals, meta: dict, title: str, shp_gdf):
         gv = np.where(mask_flat, gv, np.nan)
 
     levels = sorted(meta.get("levels", list(range(-5, 6))))
-    cmap = plt.get_cmap(meta.get("cmap", "RdBu_r"))
-    norm = BoundaryNorm(levels, ncolors=cmap.N, extend="both")
-    unit = meta.get("unit", "")
+    cmap   = plt.get_cmap(meta.get("cmap", "RdBu_r"))
+    norm   = BoundaryNorm(levels, ncolors=cmap.N, extend="both")
+    unit   = meta.get("unit", "")
 
     # ── Folium ──
     rgba = cmap(norm(gv))
@@ -253,11 +307,58 @@ def interpolate_and_plot(lons, lats, vals, meta: dict, title: str, shp_gdf):
         bounds=[[miny, minx], [maxy, maxx]],
         opacity=0.80, name="🎨 Lớp nội suy", interactive=False
     ).add_to(m)
-    if shp_gdf is not None and not shp_gdf.empty:
+
+    # Lớp ranh giới tỉnh Quảng Ninh
+    if show_tinh and gdf_tinh_qn is not None and not gdf_tinh_qn.empty:
         folium.GeoJson(
-            shp_gdf, name="🏛️ Ranh giới huyện",
-            style_function=lambda x: {"fillColor": "transparent", "color": "black", "weight": 1.2}
+            gdf_tinh_qn,
+            name="🏛️ Ranh giới tỉnh",
+            style_function=lambda x: {
+                "fillColor": "transparent", "color": "#1a1a1a", "weight": 2.0
+            }
         ).add_to(m)
+
+    # Lớp ranh giới xã
+    if show_xa and gdf_xa is not None and not gdf_xa.empty:
+        folium.GeoJson(
+            gdf_xa,
+            name="🏘️ Ranh giới xã",
+            style_function=lambda x: {
+                "fillColor": "transparent", "color": "#444444", "weight": 1.0, "dashArray": "4 2"
+            }
+        ).add_to(m)
+
+    # Nhãn tên xã
+    if show_xa_label and gdf_xa is not None and not gdf_xa.empty:
+        # Tìm cột tên xã
+        xa_name_col = None
+        for col in gdf_xa.columns:
+            if col.upper() in ("TEN_XA", "TENXA", "XA", "NAME", "TEN"):
+                xa_name_col = col
+                break
+        if xa_name_col is None and len(gdf_xa.columns) > 1:
+            # Thử cột đầu tiên không phải geometry
+            for col in gdf_xa.columns:
+                if col.lower() != "geometry":
+                    xa_name_col = col
+                    break
+
+        if xa_name_col:
+            for _, row in gdf_xa.iterrows():
+                try:
+                    centroid = row.geometry.centroid
+                    folium.Marker(
+                        location=[centroid.y, centroid.x],
+                        icon=folium.DivIcon(
+                            html=f'<div style="font-size:8px;color:#111;font-weight:600;'
+                                 f'white-space:nowrap;text-shadow:1px 1px 2px #fff,-1px -1px 2px #fff">'
+                                 f'{row[xa_name_col]}</div>',
+                            icon_size=(120, 20), icon_anchor=(60, 10)
+                        )
+                    ).add_to(m)
+                except Exception:
+                    pass
+
     cm.StepColormap(
         colors=[mcolors.to_hex(cmap(norm(v))) for v in levels[:-1]],
         vmin=levels[0], vmax=levels[-1], index=levels,
@@ -270,8 +371,20 @@ def interpolate_and_plot(lons, lats, vals, meta: dict, title: str, shp_gdf):
     ax.set_title(title, fontsize=12, fontweight="bold", pad=10)
     im = ax.imshow(gv, extent=[minx, maxx, miny, maxy],
                    cmap=cmap, norm=norm, interpolation="bilinear", origin="lower")
-    if shp_gdf is not None and not shp_gdf.empty:
-        shp_gdf.boundary.plot(ax=ax, edgecolor="black", linewidth=0.8)
+    if show_tinh and gdf_tinh_qn is not None and not gdf_tinh_qn.empty:
+        gdf_tinh_qn.boundary.plot(ax=ax, edgecolor="#1a1a1a", linewidth=1.5)
+    if show_xa and gdf_xa is not None and not gdf_xa.empty:
+        gdf_xa.boundary.plot(ax=ax, edgecolor="#555555", linewidth=0.7, linestyle="--")
+    if show_xa_label and gdf_xa is not None and not gdf_xa.empty and xa_name_col:
+        for _, row in gdf_xa.iterrows():
+            try:
+                c = row.geometry.centroid
+                ax.text(c.x, c.y, str(row[xa_name_col]),
+                        fontsize=5, ha="center", va="center", color="#111",
+                        fontweight="bold",
+                        bbox=dict(boxstyle="round,pad=0.1", fc="white", alpha=0.5, ec="none"))
+            except Exception:
+                pass
     cbar = plt.colorbar(im, ax=ax, extend="both", shrink=0.75, pad=0.02)
     cbar.set_label(f"Chuẩn sai ({unit})", fontsize=10)
     cbar.set_ticks(levels); cbar.set_ticklabels([str(v) for v in levels])
@@ -282,7 +395,8 @@ def interpolate_and_plot(lons, lats, vals, meta: dict, title: str, shp_gdf):
     return m, fig, None
 
 
-def render_var_panel(var_prefix, meta, period, month_idx, shp_gdf, month_labels):
+def render_var_panel(var_prefix, meta, period, month_idx, gdf_tinh_qn, gdf_xa, month_labels,
+                     show_tinh, show_xa, show_xa_label):
     """Tải → nội suy → hiển thị bản đồ cho 1 biến."""
     with st.spinner(f"⏳ Đang tải {meta['label']} …"):
         nc_bytes = download_nc(period, var_prefix)
@@ -300,7 +414,11 @@ def render_var_panel(var_prefix, meta, period, month_idx, shp_gdf, month_labels)
     title = f"Chuẩn sai {meta['label']} – {month_str} (Kỳ {period[:4]}/{period[4:]})"
 
     with st.spinner("🗺️ Đang vẽ bản đồ …"):
-        fmap, fig, err2 = interpolate_and_plot(lons, lats, vals, meta, title, shp_gdf)
+        fmap, fig, err2 = interpolate_and_plot(
+            lons, lats, vals, meta, title,
+            gdf_tinh_qn, gdf_xa,
+            show_tinh, show_xa, show_xa_label
+        )
     if err2:
         st.error(f"❌ {err2}")
         return
@@ -337,9 +455,11 @@ def page_tong_quan():
 def page_du_bao():
     st.markdown('<div class="module-header">🔄 Dự báo khí hậu mùa</div>', unsafe_allow_html=True)
 
-    shp_gdf = load_quangninh_shp()
-    if shp_gdf is None:
-        st.warning("⚠️ Không tải được shapefile – bản đồ sẽ không có ranh giới huyện.")
+    with st.spinner("⏳ Đang tải shapefile …"):
+        gdf_tinh_qn, gdf_xa = load_shapefiles()
+
+    if gdf_tinh_qn is None and gdf_xa is None:
+        st.warning("⚠️ Không tải được shapefile – bản đồ sẽ không có ranh giới.")
 
     with st.spinner("🔍 Kiểm tra dữ liệu mới nhất trên server …"):
         periods = fetch_available_periods()
@@ -347,29 +467,46 @@ def page_du_bao():
         st.error("❌ Không kết nối được server hoặc chưa có dữ liệu.")
         return
 
-    # ── Bộ điều khiển ──
-    periods_desc = list(reversed(periods))
-    yr_mo_labels = [f"{p[:4]}/{p[4:]}" for p in periods_desc]
+    # ── Bộ điều khiển kỳ / hạn ──
+    periods_desc   = list(reversed(periods))
+    yr_mo_labels   = [f"{p[:4]}/{p[4:]}" for p in periods_desc]
 
     col1, col2 = st.columns([2, 2])
     with col1:
-        sel_idx = st.selectbox("📅 Kỳ dự báo:", range(len(periods_desc)),
-                               format_func=lambda i: yr_mo_labels[i],
-                               help="Tự động cập nhật khi server có thư mục mới")
+        sel_idx = st.selectbox(
+            "📅 Kỳ dự báo:", range(len(periods_desc)),
+            format_func=lambda i: yr_mo_labels[i],
+            help="Tự động cập nhật khi server có thư mục mới"
+        )
         sel_period = periods_desc[sel_idx]
 
     yr, mo = int(sel_period[:4]), int(sel_period[4:])
+
+    # Hạn dự báo: tháng kỳ phát + 1, +2, +3
+    # Ví dụ kỳ 202505 → hạn T6/2025, T7/2025, T8/2025
     month_labels = []
-    for d in range(3):
+    for d in range(1, 4):          # d = 1, 2, 3  (thay vì 0, 1, 2)
         m2 = mo + d
         y2 = yr + (m2 - 1) // 12
         m2 = ((m2 - 1) % 12) + 1
         month_labels.append(f"Tháng {m2:02d}/{y2}")
 
     with col2:
-        month_idx = st.selectbox("🗓️ Hạn dự báo:", range(3),
-                                 format_func=lambda i: month_labels[i],
-                                 help="Tối đa 3 tháng")
+        month_idx = st.selectbox(
+            "🗓️ Hạn dự báo:", range(3),
+            format_func=lambda i: month_labels[i],
+            help="3 tháng tiếp theo sau kỳ phát bản tin"
+        )
+
+    # ── Bộ điều khiển lớp ranh giới ──
+    st.markdown("**🗂️ Hiển thị lớp bản đồ:**")
+    lc1, lc2, lc3 = st.columns(3)
+    with lc1:
+        show_tinh     = st.checkbox("🏛️ Ranh giới tỉnh Quảng Ninh", value=True)
+    with lc2:
+        show_xa       = st.checkbox("🏘️ Ranh giới xã",               value=True)
+    with lc3:
+        show_xa_label = st.checkbox("🔤 Tên xã",                       value=False)
 
     st.markdown("---")
 
@@ -377,34 +514,22 @@ def page_du_bao():
     tab_c, tab_e = st.tabs(["🌡️ Chuẩn sai dự báo khí hậu", "⚠️ Chuẩn sai dự báo cực đoan"])
 
     with tab_c:
-        st.caption("Biến: Nhiệt độ TB (T2m) · Nhiệt độ Max (Tx) · Nhiệt độ Min (Tm) · Lượng mưa (R) · Độ ẩm (RH2m)")
         sel_c = st.selectbox("Chọn biến:", list(CLIMATE_VARS.keys()),
-                              format_func=lambda k: CLIMATE_VARS[k]["label"],
-                              key="sel_c")
+                             format_func=lambda k: CLIMATE_VARS[k]["label"],
+                             key="sel_c")
         if st.button("🗺️ Vẽ bản đồ", key="btn_c", type="primary"):
-            render_var_panel(sel_c, CLIMATE_VARS[sel_c], sel_period, month_idx, shp_gdf, month_labels)
-
-        with st.expander("ℹ️ Thông tin biến"):
-            url_ex = f"{BASE_URL}{sel_period}/{sel_c}.{sel_period}.nc"
-            st.markdown(f"**Biến:** `{sel_c}` | **Đơn vị:** {CLIMATE_VARS[sel_c]['unit']}  \n"
-                        f"**URL:** [{url_ex}]({url_ex})")
+            render_var_panel(sel_c, CLIMATE_VARS[sel_c], sel_period, month_idx,
+                             gdf_tinh_qn, gdf_xa, month_labels,
+                             show_tinh, show_xa, show_xa_label)
 
     with tab_e:
-        st.caption("Biến: CDD · CWD · FD13 · FD15 · Rx1day · Rx5day · SU35 · SU37 · SU39 · Evap")
         sel_e = st.selectbox("Chọn biến:", list(EXTREME_VARS.keys()),
-                              format_func=lambda k: EXTREME_VARS[k]["label"],
-                              key="sel_e")
+                             format_func=lambda k: EXTREME_VARS[k]["label"],
+                             key="sel_e")
         if st.button("🗺️ Vẽ bản đồ", key="btn_e", type="primary"):
-            render_var_panel(sel_e, EXTREME_VARS[sel_e], sel_period, month_idx, shp_gdf, month_labels)
-
-        with st.expander("ℹ️ Thông tin biến"):
-            url_ex = f"{BASE_URL}{sel_period}/{sel_e}.{sel_period}.nc"
-            st.markdown(f"**Biến:** `{sel_e}` | **Đơn vị:** {EXTREME_VARS[sel_e]['unit']}  \n"
-                        f"**URL:** [{url_ex}]({url_ex})")
-
-    st.markdown("---")
-    st.caption(f"📡 Server: `{BASE_URL}` | Kỳ hiện có: **{periods[0]}** – **{periods[-1]}** | "
-               f"Cập nhật: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+            render_var_panel(sel_e, EXTREME_VARS[sel_e], sel_period, month_idx,
+                             gdf_tinh_qn, gdf_xa, month_labels,
+                             show_tinh, show_xa, show_xa_label)
 
 
 def page_ban_tin_xa():
