@@ -156,14 +156,15 @@ def load_nc_data(nc_bytes: bytes, month_idx: int):
 def load_shapefiles():
     """
     Tải shapefile tỉnh (RG_34TINH) và xã vùng nghiên cứu (QN_XA_FINAL) từ GitHub.
-    Lọc vùng Quảng Ninh (mã tỉnh 22) cho shapefile tỉnh.
-    Trả về (gdf_tinh_qn, gdf_xa) hoặc (None, None) nếu lỗi.
+    Trả về (gdf_all_tinh, gdf_tinh_qn, gdf_xa):
+      - gdf_all_tinh : toàn bộ các tỉnh (dùng làm nền)
+      - gdf_tinh_qn  : chỉ Quảng Ninh (dùng vẽ viền đậm)
+      - gdf_xa       : ranh giới xã trong vùng nghiên cứu
     """
     exts = [".shp", ".dbf", ".shx", ".prj"]
     tmp_dir = tempfile.mkdtemp()
 
     def _download_shp(name):
-        """Tải một bộ shapefile về tmp_dir, trả về đường dẫn .shp hoặc None."""
         ok = True
         for ext in exts:
             r = requests.get(SHP_QN_URL + name + ext, timeout=30)
@@ -175,41 +176,39 @@ def load_shapefiles():
         shp_path = os.path.join(tmp_dir, name + ".shp")
         return shp_path if ok and os.path.exists(shp_path) else None
 
-    gdf_tinh_qn = None
-    gdf_xa      = None
+    gdf_all_tinh = None
+    gdf_tinh_qn  = None
+    gdf_xa       = None
 
     try:
-        # ── Ranh giới tỉnh → lọc Quảng Ninh ──
         path_tinh = _download_shp("RG_34TINH")
         if path_tinh:
-            gdf_tinh = gpd.read_file(path_tinh)
-            if gdf_tinh.crs and gdf_tinh.crs.to_epsg() != 4326:
-                gdf_tinh = gdf_tinh.to_crs(epsg=4326)
-            # Lọc Quảng Ninh: thử các cột tên tỉnh / mã tỉnh phổ biến
-            cols = [c.upper() for c in gdf_tinh.columns]
+            gdf_all = gpd.read_file(path_tinh)
+            if gdf_all.crs and gdf_all.crs.to_epsg() != 4326:
+                gdf_all = gdf_all.to_crs(epsg=4326)
+            gdf_all_tinh = gdf_all.copy()
+
+            # Lọc riêng Quảng Ninh
             qn_mask = None
-            for col_raw in gdf_tinh.columns:
+            for col_raw in gdf_all.columns:
                 col_up = col_raw.upper()
                 if col_up in ("TINH", "TEN_TINH", "PROVINCE", "NAME"):
-                    qn_mask = gdf_tinh[col_raw].str.contains("Quảng Ninh|Quang Ninh", case=False, na=False)
+                    qn_mask = gdf_all[col_raw].str.contains(
+                        "Quảng Ninh|Quang Ninh", case=False, na=False)
                     break
                 elif col_up in ("MATINH", "MA_TINH", "TINH_CD", "PROVCODE", "MA"):
-                    # Mã tỉnh Quảng Ninh = 22
                     try:
-                        qn_mask = gdf_tinh[col_raw].astype(str).str.strip() == "22"
+                        qn_mask = gdf_all[col_raw].astype(str).str.strip() == "22"
                     except:
                         pass
                     break
             if qn_mask is not None and qn_mask.any():
-                gdf_tinh_qn = gdf_tinh[qn_mask].copy()
-            else:
-                # Nếu không lọc được thì bỏ qua lớp tỉnh
-                gdf_tinh_qn = None
+                gdf_tinh_qn = gdf_all[qn_mask].copy()
     except Exception:
-        gdf_tinh_qn = None
+        gdf_all_tinh = None
+        gdf_tinh_qn  = None
 
     try:
-        # ── Ranh giới xã vùng nghiên cứu ──
         path_xa = _download_shp("QN_XA_FINAL")
         if path_xa:
             gdf_xa = gpd.read_file(path_xa)
@@ -218,7 +217,7 @@ def load_shapefiles():
     except Exception:
         gdf_xa = None
 
-    return gdf_tinh_qn, gdf_xa
+    return gdf_all_tinh, gdf_tinh_qn, gdf_xa
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -243,37 +242,60 @@ def idw_knn(xi, yi, zi, query_xy, k=12, power=3.0, eps=1e-12):
 
 
 def interpolate_and_plot(lons, lats, vals, meta: dict, title: str,
-                         gdf_tinh_qn, gdf_xa):
+                         gdf_all_tinh, gdf_tinh_qn, gdf_xa):
     """
-    Nội suy IDW → vẽ matplotlib → trả về (png_bytes, err_str).
-    Không dùng Folium — PNG bytes lưu vào session_state ổn định qua mọi re-run.
+    Nội suy IDW chỉ trong vùng Quảng Ninh.
+    Vẽ nền xám các tỉnh lân cận, zoom cố định theo bbox Quảng Ninh.
+    Trả về (png_bytes, err_str).
     """
-    # Xác định bbox
-    ref_gdf = gdf_xa if (gdf_xa is not None and not gdf_xa.empty) else gdf_tinh_qn
-    if ref_gdf is not None and not ref_gdf.empty:
-        minx, miny, maxx, maxy = ref_gdf.total_bounds
-        minx -= 0.15; miny -= 0.15; maxx += 0.15; maxy += 0.15
-        shape_union = ref_gdf.unary_union
+    # ── 1. Xác định bbox zoom theo Quảng Ninh ──
+    # Ưu tiên: gdf_xa → gdf_tinh_qn → fallback hardcode
+    ref_qn = None
+    if gdf_xa is not None and not gdf_xa.empty:
+        ref_qn = gdf_xa
+    elif gdf_tinh_qn is not None and not gdf_tinh_qn.empty:
+        ref_qn = gdf_tinh_qn
+
+    if ref_qn is not None:
+        minx, miny, maxx, maxy = ref_qn.total_bounds
     else:
         minx, miny, maxx, maxy = 106.3, 20.6, 108.3, 21.8
+
+    # Buffer nhỏ xung quanh để không bị sát viền
+    BUF = 0.12
+    plot_minx = minx - BUF
+    plot_miny = miny - BUF
+    plot_maxx = maxx + BUF
+    plot_maxy = maxy + BUF
+
+    # ── 2. Xác định polygon mask nội suy (chỉ Quảng Ninh) ──
+    if ref_qn is not None:
+        shape_union = ref_qn.unary_union
+    elif gdf_tinh_qn is not None and not gdf_tinh_qn.empty:
+        shape_union = gdf_tinh_qn.unary_union
+    else:
         shape_union = None
 
-    # Lọc điểm dữ liệu trong vùng mở rộng
-    buf = 1.5
-    ok = (lons >= minx-buf) & (lons <= maxx+buf) & (lats >= miny-buf) & (lats <= maxy+buf)
+    # ── 3. Lọc điểm dữ liệu – mở rộng hơn để IDW có đủ hàng xóm ──
+    buf_data = 1.5
+    ok = ((lons >= minx - buf_data) & (lons <= maxx + buf_data) &
+          (lats >= miny - buf_data) & (lats <= maxy + buf_data))
     xi, yi, zi = lons[ok], lats[ok], vals[ok]
     if xi.size == 0:
         return None, "Không có điểm dữ liệu trong vùng Quảng Ninh"
 
-    # Lưới nội suy
+    # ── 4. Lưới nội suy (chỉ trong bbox Quảng Ninh) ──
     GRID_N, SIGMA = 500, 1.2
-    gx, gy = np.meshgrid(np.linspace(minx, maxx, GRID_N), np.linspace(miny, maxy, GRID_N))
+    gx, gy = np.meshgrid(
+        np.linspace(minx, maxx, GRID_N),
+        np.linspace(miny, maxy, GRID_N)
+    )
     grid_xy = np.column_stack([gx.ravel(), gy.ravel()])
     gv = idw_knn(xi, yi, zi, grid_xy).reshape(gx.shape)
     if SIGMA > 0:
         gv = gaussian_filter(gv, sigma=SIGMA)
 
-    # Mask theo ranh giới vùng nghiên cứu
+    # ── 5. Mask: chỉ giữ pixel nằm trong polygon Quảng Ninh ──
     if shape_union is not None:
         prep_s = prep(shape_union)
         mask_flat = np.fromiter(
@@ -287,7 +309,7 @@ def interpolate_and_plot(lons, lats, vals, meta: dict, title: str,
     norm   = BoundaryNorm(levels, ncolors=cmap.N, extend="both")
     unit   = meta.get("unit", "")
 
-    # Tìm cột tên xã
+    # Tên xã
     xa_name_col = None
     if gdf_xa is not None and not gdf_xa.empty:
         for col in gdf_xa.columns:
@@ -300,27 +322,37 @@ def interpolate_and_plot(lons, lats, vals, meta: dict, title: str,
                     xa_name_col = col
                     break
 
-    # ── Vẽ matplotlib ──
-    aspect = (maxy - miny) / (maxx - minx)
+    # ── 6. Vẽ matplotlib ──
+    aspect = (plot_maxy - plot_miny) / (plot_maxx - plot_minx)
     fig_w  = 11
     fig_h  = max(7, fig_w * aspect + 1.5)
     fig, ax = plt.subplots(figsize=(fig_w, fig_h), dpi=150)
 
-    im = ax.imshow(gv, extent=[minx, maxx, miny, maxy],
-                   cmap=cmap, norm=norm, interpolation="bilinear",
-                   origin="lower", alpha=0.92, zorder=2)
+    # 6a. Nền xám tất cả các tỉnh (clip theo extent hiển thị)
+    if gdf_all_tinh is not None and not gdf_all_tinh.empty:
+        gdf_all_tinh.plot(ax=ax, facecolor="#dde3e8", edgecolor="#aab0b8",
+                          linewidth=0.6, zorder=1)
 
-    # Ranh giới tỉnh
+    # 6b. Lớp màu nội suy (chỉ Quảng Ninh)
+    im = ax.imshow(
+        gv,
+        extent=[minx, maxx, miny, maxy],   # extent đúng với lưới nội suy
+        cmap=cmap, norm=norm,
+        interpolation="bilinear",
+        origin="lower", alpha=0.92, zorder=2
+    )
+
+    # 6c. Viền tỉnh Quảng Ninh đậm hơn
     if gdf_tinh_qn is not None and not gdf_tinh_qn.empty:
         gdf_tinh_qn.boundary.plot(ax=ax, edgecolor="#111111",
-                                   linewidth=1.8, zorder=4)
+                                   linewidth=2.0, zorder=4)
 
-    # Ranh giới xã
+    # 6d. Ranh giới xã
     if gdf_xa is not None and not gdf_xa.empty:
         gdf_xa.boundary.plot(ax=ax, edgecolor="#444444",
                               linewidth=0.8, linestyle="--", zorder=3)
 
-    # Tên xã
+    # 6e. Tên xã
     if gdf_xa is not None and not gdf_xa.empty and xa_name_col:
         for _, row in gdf_xa.iterrows():
             try:
@@ -333,26 +365,29 @@ def interpolate_and_plot(lons, lats, vals, meta: dict, title: str,
             except Exception:
                 pass
 
-    # Colorbar
+    # 6f. Colorbar
     cbar = plt.colorbar(im, ax=ax, extend="both",
                         shrink=0.80, pad=0.02, aspect=28)
     cbar.set_label(f"Chuẩn sai ({unit})", fontsize=10)
     cbar.set_ticks(levels)
     cbar.set_ticklabels([str(v) for v in levels], fontsize=8)
 
+    # 6g. Giới hạn zoom cố định theo Quảng Ninh + buffer
+    ax.set_xlim(plot_minx, plot_maxx)
+    ax.set_ylim(plot_miny, plot_maxy)
+
     ax.set_title(title, fontsize=12, fontweight="bold", pad=10)
-    ax.set_xlim(minx, maxx); ax.set_ylim(miny, maxy)
     ax.set_xlabel("Kinh độ (°E)", fontsize=9)
     ax.set_ylabel("Vĩ độ (°N)",   fontsize=9)
     ax.ticklabel_format(useOffset=False, style="plain")
     ax.tick_params(labelsize=8)
 
-    # Legend lớp ranh giới
+    # Legend
     legend_handles = []
     if gdf_tinh_qn is not None and not gdf_tinh_qn.empty:
         legend_handles.append(
             Patch(facecolor="none", edgecolor="#111111",
-                  linewidth=1.5, label="Ranh giới tỉnh")
+                  linewidth=1.5, label="Ranh giới Quảng Ninh")
         )
     if gdf_xa is not None and not gdf_xa.empty:
         legend_handles.append(
@@ -365,7 +400,6 @@ def interpolate_and_plot(lons, lats, vals, meta: dict, title: str,
 
     plt.tight_layout()
 
-    # Xuất PNG bytes
     buf_out = io.BytesIO()
     fig.savefig(buf_out, format="png", dpi=150, bbox_inches="tight")
     buf_out.seek(0)
@@ -375,12 +409,9 @@ def interpolate_and_plot(lons, lats, vals, meta: dict, title: str,
     return png_bytes, None
 
 
-def render_var_panel(var_prefix, meta, period, month_idx, gdf_tinh_qn, gdf_xa,
+def render_var_panel(var_prefix, meta, period, month_idx,
+                     gdf_all_tinh, gdf_tinh_qn, gdf_xa,
                      month_labels, state_key: str):
-    """
-    Tải → nội suy → lưu PNG bytes vào st.session_state[state_key].
-    PNG bytes là plain bytes → ổn định 100% qua mọi lần re-run Streamlit.
-    """
     with st.spinner(f"⏳ Đang tải {meta['label']} …"):
         nc_bytes = download_nc(period, var_prefix)
     if nc_bytes is None:
@@ -398,7 +429,8 @@ def render_var_panel(var_prefix, meta, period, month_idx, gdf_tinh_qn, gdf_xa,
 
     with st.spinner("🗺️ Đang vẽ bản đồ …"):
         png_bytes, err2 = interpolate_and_plot(
-            lons, lats, vals, meta, title, gdf_tinh_qn, gdf_xa
+            lons, lats, vals, meta, title,
+            gdf_all_tinh, gdf_tinh_qn, gdf_xa
         )
     if err2:
         st.session_state[state_key] = {"error": err2}
@@ -413,10 +445,6 @@ def render_var_panel(var_prefix, meta, period, month_idx, gdf_tinh_qn, gdf_xa,
 
 
 def display_panel(state_key: str):
-    """
-    Hiển thị ảnh PNG từ session_state bằng st.image().
-    Luôn hiện qua mọi lần re-run — không bao giờ biến mất.
-    """
     result = st.session_state.get(state_key)
     if result is None:
         return
@@ -452,9 +480,9 @@ def page_du_bao():
     st.markdown('<div class="module-header">🔄 Dự báo khí hậu mùa</div>', unsafe_allow_html=True)
 
     with st.spinner("⏳ Đang tải shapefile …"):
-        gdf_tinh_qn, gdf_xa = load_shapefiles()
+        gdf_all_tinh, gdf_tinh_qn, gdf_xa = load_shapefiles()
 
-    if gdf_tinh_qn is None and gdf_xa is None:
+    if gdf_all_tinh is None and gdf_xa is None:
         st.warning("⚠️ Không tải được shapefile – bản đồ sẽ không có ranh giới.")
 
     with st.spinner("🔍 Kiểm tra dữ liệu mới nhất trên server …"):
@@ -463,9 +491,8 @@ def page_du_bao():
         st.error("❌ Không kết nối được server hoặc chưa có dữ liệu.")
         return
 
-    # ── Bộ điều khiển kỳ / hạn ──
-    periods_desc   = list(reversed(periods))
-    yr_mo_labels   = [f"{p[:4]}/{p[4:]}" for p in periods_desc]
+    periods_desc = list(reversed(periods))
+    yr_mo_labels = [f"{p[:4]}/{p[4:]}" for p in periods_desc]
 
     col1, col2 = st.columns([2, 2])
     with col1:
@@ -478,10 +505,8 @@ def page_du_bao():
 
     yr, mo = int(sel_period[:4]), int(sel_period[4:])
 
-    # Hạn dự báo: tháng kỳ phát + 1, +2, +3
-    # Ví dụ kỳ 202505 → hạn T6/2025, T7/2025, T8/2025
     month_labels = []
-    for d in range(1, 4):          # d = 1, 2, 3  (thay vì 0, 1, 2)
+    for d in range(1, 4):
         m2 = mo + d
         y2 = yr + (m2 - 1) // 12
         m2 = ((m2 - 1) % 12) + 1
@@ -496,7 +521,6 @@ def page_du_bao():
 
     st.markdown("---")
 
-    # ── 2 tab con ──
     tab_c, tab_e = st.tabs(["🌡️ Chuẩn sai dự báo khí hậu", "⚠️ Chuẩn sai dự báo cực đoan"])
 
     with tab_c:
@@ -505,7 +529,8 @@ def page_du_bao():
                              key="sel_c")
         if st.button("🗺️ Vẽ bản đồ", key="btn_c", type="primary"):
             render_var_panel(sel_c, CLIMATE_VARS[sel_c], sel_period, month_idx,
-                             gdf_tinh_qn, gdf_xa, month_labels, state_key="map_c")
+                             gdf_all_tinh, gdf_tinh_qn, gdf_xa,
+                             month_labels, state_key="map_c")
         display_panel("map_c")
 
     with tab_e:
@@ -514,7 +539,8 @@ def page_du_bao():
                              key="sel_e")
         if st.button("🗺️ Vẽ bản đồ", key="btn_e", type="primary"):
             render_var_panel(sel_e, EXTREME_VARS[sel_e], sel_period, month_idx,
-                             gdf_tinh_qn, gdf_xa, month_labels, state_key="map_e")
+                             gdf_all_tinh, gdf_tinh_qn, gdf_xa,
+                             month_labels, state_key="map_e")
         display_panel("map_e")
 
 
@@ -557,7 +583,7 @@ with st.sidebar:
     st.markdown("Phòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu")
     st.markdown("Viện Khoa học Khí tượng Thủy văn Môi trường và Biển")
     st.markdown("---")
-    st.markdown("*Phiên bản 1.0 – 06/2026*")
+    st.markdown("*Phiên bản 1.0.3 – 06/2026*")
 
 # ── Router ──
 if   menu == "🏠 Tổng quan":                          page_tong_quan()
