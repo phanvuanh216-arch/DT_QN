@@ -1,312 +1,283 @@
 """
-Ứng dụng Streamlit - Hệ thống Bản tin Khí hậu Nông nghiệp Quảng Ninh
-Cấu trúc module độc lập theo sơ đồ thiết kế
+utils/nc_data_fetcher.py
+Tải & xử lý dữ liệu chuẩn sai khí hậu mùa (.nc) từ server nội bộ:
+    http://222.254.32.10/forecast/Detai_QuangNinh/domain_d02/
+
+Cấu trúc trên server:
+    domain_d02/
+        202211/   202212/   ...   202606/      <- thư mục đặt tên YYYYMM (kỳ chạy mô hình)
+            ano.T2m.<YYYYMM>.nc
+            ano.Tx.<YYYYMM>.nc
+            ano.Tm.<YYYYMM>.nc
+            ano.R.<YYYYMM>.nc
+            ano.RH2m.<YYYYMM>.nc
+            ano.CDD.<YYYYMM>.nc
+            ano.CWD.<YYYYMM>.nc
+            ano.Evap.<YYYYMM>.nc
+            ano.FD13.<YYYYMM>.nc
+            ano.FD15.<YYYYMM>.nc
+            ano.Rx1day.<YYYYMM>.nc
+            ano.Rx5day.<YYYYMM>.nc
+            ano.SU35.<YYYYMM>.nc
+            ano.SU37.<YYYYMM>.nc
+            ano.SU39.<YYYYMM>.nc
+
+Mỗi file .nc có 6 timestep (hạn dự báo tháng 1 -> tháng 6 kể từ kỳ chạy),
+nhưng ứng dụng chỉ dùng 3 timestep đầu (hạn dự báo tới 3 tháng) theo yêu cầu nghiệp vụ.
+
+Lưu ý: dùng netCDF4 thuần (đã có sẵn trong requirements.txt) để đọc file .nc
+trực tiếp từ bytes trong RAM (tham số memory=...), không cần cài thêm xarray/h5netcdf.
 """
+from __future__ import annotations
 
-import streamlit as st
-import base64
-import requests
-from io import BytesIO
-from PIL import Image, ImageFilter, ImageEnhance
+import re
+
 import numpy as np
-from modules import (
-    du_bao_tu_dong,
-    ban_tin_xa,
-    ban_tin_da_luu,
-    export_ban_tin,
-    phan_hoi,
-)
+import requests
+import streamlit as st
+import netCDF4 as nc
 
-# ─── Cấu hình trang ───────────────────────────────────────────────────────────
-st.set_page_config(
-    page_title="Bản tin Khí hậu Quảng Ninh",
-    page_icon="🌾",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
 
-# ─── Tải logo (giữ nguyên nền trắng) ─────────────────────────────────────────
-@st.cache_data
-def load_logo_base64():
+BASE_URL = "http://222.254.32.10/forecast/Detai_QuangNinh/domain_d02/"
+HAN_DU_BAO_MAX = 3  # chỉ dùng tới hạn dự báo 3 tháng (yêu cầu nghiệp vụ)
+TIMEOUT_LIST = 15
+TIMEOUT_FILE = 60
+
+SHAPEFILE_XA = "shp/QN_XA_FINAL.shp"
+SHAPEFILE_TINH = "shp/RG_34TINH.dbf"
+TEN_TINH = "Quảng Ninh"
+
+# ─── Định nghĩa 2 nhóm biến ─────────────────────────────────────────────────
+NHOM_KHI_HAU = {
+    "T2m": {"ten": "Nhiệt độ trung bình (T2m)", "don_vi": "°C", "cmap": "RdBu_r"},
+    "Tx": {"ten": "Nhiệt độ tối cao (Tx)", "don_vi": "°C", "cmap": "RdBu_r"},
+    "Tm": {"ten": "Nhiệt độ tối thấp (Tm)", "don_vi": "°C", "cmap": "RdBu_r"},
+    "R": {"ten": "Lượng mưa (R)", "don_vi": "mm", "cmap": "BrBG"},
+    "RH2m": {"ten": "Độ ẩm tương đối (RH2m)", "don_vi": "%", "cmap": "BrBG"},
+}
+
+NHOM_CUC_DOAN = {
+    "CDD": {"ten": "Số ngày khô liên tục (CDD)", "don_vi": "ngày", "cmap": "BrBG"},
+    "CWD": {"ten": "Số ngày ẩm liên tục (CWD)", "don_vi": "ngày", "cmap": "BrBG_r"},
+    "Evap": {"ten": "Lượng bốc hơi (Evap)", "don_vi": "mm", "cmap": "BrBG"},
+    "FD13": {"ten": "Số ngày rét hại < 13°C (FD13)", "don_vi": "ngày", "cmap": "RdBu"},
+    "FD15": {"ten": "Số ngày rét < 15°C (FD15)", "don_vi": "ngày", "cmap": "RdBu"},
+    "Rx1day": {"ten": "Lượng mưa lớn nhất 1 ngày (Rx1day)", "don_vi": "mm", "cmap": "BrBG"},
+    "Rx5day": {"ten": "Lượng mưa lớn nhất 5 ngày (Rx5day)", "don_vi": "mm", "cmap": "BrBG"},
+    "SU35": {"ten": "Số ngày nắng nóng > 35°C (SU35)", "don_vi": "ngày", "cmap": "RdBu_r"},
+    "SU37": {"ten": "Số ngày nắng nóng > 37°C (SU37)", "don_vi": "ngày", "cmap": "RdBu_r"},
+    "SU39": {"ten": "Số ngày nắng nóng > 39°C (SU39)", "don_vi": "ngày", "cmap": "RdBu_r"},
+}
+
+# Regex khớp directory-listing kiểu Apache mod_autoindex / Nginx autoindex:
+#   <a href="202606/">202606/</a>
+_RE_THU_MUC_YYYYMM = re.compile(r'href=["\']((\d{6})/?)["\']')
+
+
+# ─── 1. Liệt kê các kỳ chạy (thư mục YYYYMM) có trên server ────────────────
+@st.cache_data(ttl=900, show_spinner=False)
+def lay_danh_sach_ky_chay() -> list[str]:
+    """
+    Parse trang directory-listing tại BASE_URL để lấy danh sách kỳ chạy
+    (thư mục dạng YYYYMM), sắp xếp giảm dần (mới nhất trước).
+    Trả về [] nếu không kết nối được hoặc không parse được thư mục nào.
+    """
     try:
-        url = "https://raw.githubusercontent.com/phanvuanh216-arch/DT_QN/main/logo_vien.jpg"
-        resp = requests.get(url, timeout=10)
-        return base64.b64encode(resp.content).decode()
-    except Exception:
+        resp = requests.get(BASE_URL, timeout=TIMEOUT_LIST)
+        resp.raise_for_status()
+    except requests.exceptions.RequestException:
+        return []
+
+    matches = _RE_THU_MUC_YYYYMM.findall(resp.text)
+    ky_chay_set = set()
+    for _, yyyymm in matches:
+        if 1 <= int(yyyymm[4:6]) <= 12:  # lọc hợp lệ: tháng 01-12
+            ky_chay_set.add(yyyymm)
+
+    return sorted(ky_chay_set, reverse=True)
+
+
+# ─── 2. Sinh nhãn hạn dự báo (tháng 1 / 2 / 3 kể từ kỳ chạy) ────────────────
+def sinh_nhan_han_du_bao(ky_chay: str) -> list[tuple[int, str]]:
+    """
+    Trả về list (han, nhan_hien_thi) cho hạn dự báo 1..HAN_DU_BAO_MAX tháng kể từ kỳ chạy.
+    Ví dụ ky_chay='202606' -> hạn 1 = 'Tháng 07/2026', hạn 2 = 'Tháng 08/2026', hạn 3 = 'Tháng 09/2026'.
+    `han` (1-based) dùng để chọn timestep tương ứng trong file .nc (timestep 0-based = han - 1).
+    """
+    nam = int(ky_chay[:4])
+    thang = int(ky_chay[4:6])
+    nhan = []
+    for han in range(1, HAN_DU_BAO_MAX + 1):
+        t = thang + han
+        y = nam + (t - 1) // 12
+        m = (t - 1) % 12 + 1
+        nhan.append((han, f"Tháng {m:02d}/{y}"))
+    return nhan
+
+
+def dinh_dang_ky_chay(ky_chay: str) -> str:
+    """'202606' -> 'Tháng 06/2026' (dùng hiển thị 'thời gian phân tích')."""
+    return f"Tháng {ky_chay[4:6]}/{ky_chay[:4]}"
+
+
+# ─── 3. Tải file .nc của 1 biến trong 1 kỳ chạy ─────────────────────────────
+@st.cache_data(ttl=3600, show_spinner=False)
+def tai_file_nc(ky_chay: str, ma_bien: str) -> bytes | None:
+    """Tải file ano.<ma_bien>.<ky_chay>.nc từ server, trả về bytes hoặc None nếu lỗi."""
+    url = f"{BASE_URL}{ky_chay}/ano.{ma_bien}.{ky_chay}.nc"
+    try:
+        resp = requests.get(url, timeout=TIMEOUT_FILE)
+        resp.raise_for_status()
+        return resp.content
+    except requests.exceptions.RequestException:
         return None
 
-# ─── Tải ảnh nền Quảng Ninh, làm mờ + tint xanh nhẹ ────────────────────────
-@st.cache_data
-def load_bg_base64():
-    try:
-        url = "https://raw.githubusercontent.com/phanvuanh216-arch/DT_QN/main/anh_dep_quang_ninh_giao_dien_1.jpg"
-        resp = requests.get(url, timeout=15)
-        img = Image.open(BytesIO(resp.content)).convert("RGB")
-        # Resize để tăng tốc
-        w, h = img.size
-        img = img.resize((min(w, 1600), min(h, 900)), Image.LANCZOS)
-        # Làm mờ Gaussian mạnh
-        img = img.filter(ImageFilter.GaussianBlur(radius=14))
-        # Giảm sáng xuống 55%
-        img = ImageEnhance.Brightness(img).enhance(0.55)
-        # Tint xanh lá nhẹ để hoà với giao diện
-        overlay = Image.new("RGB", img.size, (8, 52, 25))
-        img = Image.blend(img, overlay, alpha=0.28)
-        buf = BytesIO()
-        img.save(buf, format="JPEG", quality=85)
-        return base64.b64encode(buf.getvalue()).decode()
-    except Exception:
-        return None
 
-logo_b64 = load_logo_base64()
-bg_b64   = load_bg_base64()
-
-logo_html = (
-    f'<img src="data:image/jpeg;base64,{logo_b64}" '
-    f'style="height:86px;width:auto;object-fit:contain;border-radius:6px;background:#fff;padding:4px;" />'
-    if logo_b64
-    else '<div style="width:86px;height:86px;background:#fff;border-radius:6px;"></div>'
-)
-
-bg_css = (
-    f'background-image: url("data:image/jpeg;base64,{bg_b64}"); '
-    f'background-size: cover; background-position: center top; background-attachment: fixed;'
-    if bg_b64
-    else 'background-color: #0d3320;'
-)
-
-# ─── CSS tùy chỉnh ────────────────────────────────────────────────────────────
-st.markdown(f"""
-<style>
-    /* ── Ẩn chrome mặc định Streamlit ───────────────────────── */
-    .block-container {{
-        padding-top: 0 !important;
-        padding-left: 1rem !important;
-        padding-right: 1rem !important;
-    }}
-    header[data-testid="stHeader"] {{
-        background: transparent !important;
-        height: 0 !important;
-        min-height: 0 !important;
-    }}
-    #MainMenu, footer {{ visibility: hidden; }}
-
-    /* ── Ảnh nền toàn trang (vùng content) ──────────────────── */
-    .stAppViewContainer > .main {{
-        {bg_css}
-    }}
-    /* Lớp phủ mờ nhẹ để text dễ đọc */
-    .stAppViewContainer > .main::before {{
-        content: "";
-        position: fixed;
-        inset: 0;
-        background: rgba(5, 30, 15, 0.18);
-        pointer-events: none;
-        z-index: 0;
-    }}
-    /* Đảm bảo nội dung nằm trên lớp phủ */
-    .block-container {{ position: relative; z-index: 1; }}
-
-    /* ── Header cố định toàn cục – full width ────────────────── */
-    .site-header {{
-        background: linear-gradient(135deg, #1a6b3a 0%, #0f4d2a 60%, #0a3d1f 100%);
-        border-bottom: 4px solid #f5a623;
-        padding: 14px 40px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 24px;
-        min-height: 106px;
-        margin: 0 -1rem 1.5rem -1rem;
-        box-shadow: 0 4px 18px rgba(0,0,0,0.45);
-    }}
-    .site-header .logo-wrap {{
-        flex-shrink: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 10px;
-        padding: 4px;
-    }}
-    .site-header .text-wrap {{
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 6px;
-        text-align: center;
-    }}
-    .site-header .line1 {{
-        color: #d4f0e0;
-        font-size: 0.95rem;
-        font-weight: 600;
-        letter-spacing: 0.05em;
-        text-transform: uppercase;
-        line-height: 1.3;
-    }}
-    .site-header .line2 {{
-        color: #f5e642;
-        font-size: 1.35rem;
-        font-weight: 800;
-        line-height: 1.3;
-        text-shadow: 0 1px 5px rgba(0,0,0,0.5);
-    }}
-
-    /* ── Card / nội dung module – bán trong suốt ────────────── */
-    div[data-testid="stVerticalBlock"] > div {{
-        /* không override hết – chỉ để nền của widget tự xử lý */
-    }}
-    /* Các metric card, expander, dataframe có nền trắng bán trong suốt */
-    [data-testid="metric-container"],
-    [data-testid="stExpander"],
-    .stDataFrame {{
-        background: rgba(255,255,255,0.88) !important;
-        border-radius: 8px;
-        backdrop-filter: blur(4px);
-    }}
-
-    /* ── Ẩn thanh MODULE header + dòng mô tả bên dưới ─────── */
-    .module-header {{ display: none !important; }}
-    .module-header + div {{ display: none !important; }}
-
-    /* ── Các style gốc giữ nguyên ───────────────────────────── */
-    .module-header {{
-        background: linear-gradient(135deg, #1e3a5f 0%, #2d6a4f 100%);
-        color: white;
-        padding: 12px 20px;
-        border-radius: 8px;
-        font-size: 1.1rem;
-        font-weight: bold;
-        margin-bottom: 10px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }}
-    .sub-module {{
-        background: rgba(240,244,248,0.92);
-        border-left: 4px solid #2d6a4f;
-        padding: 8px 14px;
-        border-radius: 4px;
-        margin: 4px 0;
-        font-size: 0.95rem;
-    }}
-    .status-active  {{ background: rgba(212,237,218,0.92); border-left: 4px solid #28a745; }}
-    .status-warning {{ background: rgba(255,243,205,0.92); border-left: 4px solid #ffc107; }}
-    .status-danger  {{ background: rgba(248,215,218,0.92); border-left: 4px solid #dc3545; }}
-    .divider {{ border: none; border-top: 2px solid #e0e0e0; margin: 20px 0; }}
-    .stTabs [data-baseweb="tab-list"] {{ gap: 6px; }}
-    .stTabs [data-baseweb="tab"] {{
-        background-color: rgba(232,244,248,0.92);
-        border-radius: 6px 6px 0 0;
-        padding: 8px 16px;
-        font-weight: 600;
-    }}
-    .stTabs [aria-selected="true"] {{
-        background-color: #1e3a5f !important;
-        color: white !important;
-    }}
-    .risk-0 {{ background-color: rgba(255,255,255,0.9); color: #333; }}
-    .risk-1 {{ background-color: rgba(255,253,231,0.92); color: #f57f17; font-weight: bold; }}
-    .risk-2 {{ background-color: rgba(255,243,224,0.92); color: #e65100; font-weight: bold; }}
-    .risk-3 {{ background-color: rgba(255,235,238,0.92); color: #b71c1c; font-weight: bold; }}
-    [data-testid="stSidebar"] {{
-        background: linear-gradient(180deg, #1e3a5f 0%, #2d3748 100%);
-    }}
-    [data-testid="stSidebar"] * {{ color: #e2e8f0 !important; }}
-</style>
-""", unsafe_allow_html=True)
-
-# ─── JS: ẩn dòng mô tả nằm dưới thanh .module-header ───────────────────────────
-st.markdown("""
-<script>
-(function hideModuleDesc() {
-    function run() {
-        document.querySelectorAll('.module-header').forEach(function(el) {
-            // Ẩn phần tử cha chứa .module-header
-            var parent = el.closest('[data-testid="stMarkdownContainer"]');
-            if (parent) {
-                // Lấy stVerticalBlock cha chứa cả header + description
-                var block = parent.closest('[data-testid="stVerticalBlock"]');
-                if (block) {
-                    var children = Array.from(block.children);
-                    var idx = children.findIndex(function(c) { return c.contains(el); });
-                    // Ẩn phần tử ngay sau (description text)
-                    if (idx >= 0 && children[idx + 1]) {
-                        children[idx + 1].style.display = 'none';
-                    }
-                }
-            }
-        });
+# ─── 4. Đọc dữ liệu raster (lon, lat, mảng giá trị) cho 1 hạn dự báo ───────
+def doc_du_lieu_raster(ky_chay: str, ma_bien: str, han: int) -> dict:
+    """
+    Trả về dict {
+        'lon': np.ndarray (1D),
+        'lat': np.ndarray (1D),
+        'data': np.ndarray 2D (lat, lon) - đã thay missing -> NaN,
+        'thoi_gian_du_bao': str | None  (đã format sẵn, vd '2026-07-15'),
+        'loi': None | str
     }
-    // Chạy ngay và sau 1s để đảm bảo DOM đã render
-    run();
-    setTimeout(run, 800);
-    setTimeout(run, 2000);
-})();
-</script>
-""", unsafe_allow_html=True)
+    han: 1..HAN_DU_BAO_MAX (hạn dự báo tính theo tháng kể từ kỳ chạy)
+    """
+    raw = tai_file_nc(ky_chay, ma_bien)
+    if raw is None:
+        return {"loi": (
+            f"Không tải được file ano.{ma_bien}.{ky_chay}.nc từ server. "
+            f"Kiểm tra kết nối tới {BASE_URL}{ky_chay}/ hoặc tên file/biến."
+        )}
 
-# ─── Header cố định – hiển thị trên mọi module ────────────────────────────────
-st.markdown(f"""
-<div class="site-header">
-    <div class="logo-wrap">{logo_html}</div>
-    <div class="text-wrap">
-        <div class="line1">Viện Khoa học Khí tượng Thủy văn Môi trường và Biển</div>
-        <div class="line2">Công cụ quản lý rủi ro khí hậu đối với cây trồng và vật nuôi trên địa bàn tỉnh Quảng Ninh</div>
-    </div>
-</div>
-""", unsafe_allow_html=True)
+    try:
+        ds = nc.Dataset(f"inmemory_{ky_chay}_{ma_bien}.nc", memory=raw)
+    except Exception as exc:
+        return {"loi": f"Không đọc được file NetCDF (file lỗi hoặc không đúng định dạng): {exc}"}
 
-# ─── Sidebar – điều hướng ──────────────────────────────────────────────────────
-with st.sidebar:
-    st.markdown("## 🌾 Bản tin Khí hậu")
-    st.markdown("**Quảng Ninh – Nông nghiệp**")
-    st.markdown("---")
+    try:
+        bien_ten = ma_bien if ma_bien in ds.variables else None
+        if bien_ten is None:
+            ung_vien = [v for v in ds.variables if v not in ("lon", "lat", "time", "longitude", "latitude")]
+            if not ung_vien:
+                return {"loi": f"Không tìm thấy biến '{ma_bien}' trong file NetCDF."}
+            bien_ten = ung_vien[0]
 
-    menu = st.radio(
-        "📌 Chọn module:",
-        [
-            "🏠 Tổng quan",
-            "🔄 Dự báo khí hậu mùa",
-            "📋 Bản tin cảnh báo rủi ro khí hậu",
-            "💬 Phản hồi",
-        ],
-        label_visibility="collapsed",
-    )
+        var = ds.variables[bien_ten]
 
-    st.markdown("---")
-    st.markdown("Đơn vị phát triển: Phòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu")
-    st.markdown("Viện Khoa học Khí tượng Thủy văn Môi trường và Biển")
-    st.markdown("---")
-    st.markdown("*Phiên bản 1.0 – 06/2026*")
+        ts_index = han - 1  # 0-based
+        n_time = var.shape[0] if "time" in var.dimensions else 1
+        if ts_index >= n_time:
+            return {"loi": f"File chỉ có {n_time} hạn dự báo, không có hạn thứ {han}."}
+
+        lat_name = "lat" if "lat" in ds.variables else ("latitude" if "latitude" in ds.variables else None)
+        lon_name = "lon" if "lon" in ds.variables else ("longitude" if "longitude" in ds.variables else None)
+        if lat_name is None or lon_name is None:
+            return {"loi": "Không tìm thấy biến tọa độ lat/lon trong file NetCDF."}
+
+        if "time" in var.dimensions:
+            gia_tri = np.asarray(var[ts_index, :, :], dtype="float64")
+        else:
+            gia_tri = np.asarray(var[:, :], dtype="float64")
+
+        if np.ma.is_masked(gia_tri) or isinstance(gia_tri, np.ma.MaskedArray):
+            mask = np.ma.getmaskarray(gia_tri)
+            gia_tri = np.ma.filled(gia_tri, np.nan)
+            gia_tri[mask] = np.nan
+
+        # Phòng trường hợp giá trị fill không được netCDF4 tự nhận làm mask
+        # (ví dụ thiếu khai báo chuẩn _FillValue): áp dụng ngưỡng an toàn dựa trên
+        # quan sát thực tế (ảnh "cdo infon" cho thấy Minimum không xuống tới -9000).
+        gia_tri = np.where(gia_tri <= -9000, np.nan, gia_tri)
+        gia_tri = np.where(np.abs(gia_tri) > 1e6, np.nan, gia_tri)
+
+        lat_vals = np.asarray(ds.variables[lat_name][:], dtype="float64")
+        lon_vals = np.asarray(ds.variables[lon_name][:], dtype="float64")
+
+        thoi_gian_str = None
+        if "time" in ds.variables:
+            try:
+                time_var = ds.variables["time"]
+                cf_date = nc.num2date(
+                    time_var[ts_index],
+                    units=time_var.units,
+                    calendar=getattr(time_var, "calendar", "standard"),
+                )
+                thoi_gian_str = cf_date.strftime("%Y-%m-%d")
+            except Exception:
+                thoi_gian_str = None
+
+        return {
+            "lon": lon_vals,
+            "lat": lat_vals,
+            "data": gia_tri,
+            "thoi_gian_du_bao": thoi_gian_str,
+            "loi": None,
+        }
+    finally:
+        ds.close()
 
 
-# ─── Nội dung chính ────────────────────────────────────────────────────────────
-if menu == "🏠 Tổng quan":
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("🏘️ Số xã", "28")
-    col2.metric("🌱 Đối tượng nông nghiệp", "4")
-    col3.metric("📅 Kỳ dự báo", "Từ 1 đến 3 tháng")
-    col4.metric("📄 Bản tin đã tạo", "0")
+# ─── 5. Shapefile ranh giới (cache để không đọc lại mỗi lần) ───────────────
+@st.cache_resource(show_spinner=False)
+def doc_shapefile_xa():
+    import geopandas as gpd
+    return gpd.read_file(SHAPEFILE_XA)
 
-    st.markdown("---")
-    st.markdown("### 📊 Luồng xử lý hệ thống")
-    st.image("/mnt/user-data/uploads/1780451673991_image.png", use_container_width=True)
 
-elif menu == "🔄 Dự báo khí hậu mùa":
-    du_bao_tu_dong.render()
+@st.cache_resource(show_spinner=False)
+def doc_ranh_gioi_tinh():
+    """Lấy polygon ranh giới tỉnh Quảng Ninh từ shapefile 34 tỉnh, dùng để mask raster."""
+    import geopandas as gpd
+    gdf = gpd.read_file(SHAPEFILE_TINH)
+    qn = gdf[gdf["ten_tinh"] == TEN_TINH]
+    if qn.empty:
+        return None
+    return qn
 
-elif menu == "📋 Bản tin cảnh báo rủi ro khí hậu":
-    ban_tin_xa.render()
 
-    st.markdown("---")
+# ─── 6. Tóm tắt giá trị trung bình theo từng xã (clip theo shapefile) ──────
+def tinh_trung_binh_theo_xa(lon: np.ndarray, lat: np.ndarray, data: np.ndarray):
+    """
+    Trả về GeoDataFrame (bản sao của shapefile xã) có thêm cột 'gia_tri'
+    = trung bình các điểm lưới rơi vào từng xã.
+    """
+    import shapely
 
-    tab_export, tab_saved = st.tabs(["📤 Export bản tin", "💾 Bản tin đã lưu"])
-    with tab_export:
-        export_ban_tin.render()
-    with tab_saved:
-        ban_tin_da_luu.render()
+    gdf = doc_shapefile_xa().copy()
+    lon2d, lat2d = np.meshgrid(lon, lat)
+    valid = ~np.isnan(data)
 
-elif menu == "💬 Phản hồi":
-    phan_hoi.render()
+    pts_lon = lon2d[valid]
+    pts_lat = lat2d[valid]
+    pts_val = data[valid]
+
+    ket_qua = []
+    for geom in gdf.geometry:
+        if pts_lon.size == 0:
+            ket_qua.append(np.nan)
+            continue
+        trong_xa = shapely.contains_xy(geom, pts_lon, pts_lat)
+        if trong_xa.sum() == 0:
+            ket_qua.append(np.nan)
+        else:
+            ket_qua.append(float(np.mean(pts_val[trong_xa])))
+
+    gdf["gia_tri"] = ket_qua
+    return gdf
+
+
+def mask_raster_theo_tinh(lon: np.ndarray, lat: np.ndarray, data: np.ndarray) -> np.ndarray:
+    """Trả về bản sao của `data` với các điểm nằm ngoài ranh giới tỉnh Quảng Ninh -> NaN."""
+    import shapely
+
+    qn = doc_ranh_gioi_tinh()
+    if qn is None:
+        return data  # không có ranh giới tỉnh -> trả nguyên bản, không mask
+
+    geom = qn.union_all() if hasattr(qn, "union_all") else qn.unary_union
+    lon2d, lat2d = np.meshgrid(lon, lat)
+    mask = shapely.contains_xy(geom, lon2d, lat2d)
+    return np.where(mask, data, np.nan)
