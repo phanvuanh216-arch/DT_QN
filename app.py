@@ -333,7 +333,7 @@ def _idw_knn(xi, yi, zi, query_xy, k=12, power=3.0, eps=1e-12):
 @st.cache_data(show_spinner=False)
 def _compute_grid(lons_t: tuple, lats_t: tuple, vals_t: tuple,
                   minx, miny, maxx, maxy, mask_wkt: str,
-                  GRID_N: int = 150, SIGMA: float = 1.0):
+                  GRID_N: int = 400, SIGMA: float = 1.0):
     """
     IDW + smooth + mask – cache_data → gọi lại cùng tham số trả về ngay.
     GRID_N=150: 22500 điểm (thay vì 90000), đủ mịn cho vùng Quảng Ninh.
