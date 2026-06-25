@@ -4,6 +4,12 @@
 - Nội suy toàn tỉnh Quảng Ninh (mask theo ranh giới tỉnh)
 - Lớp xã chỉ là overlay bật/tắt để xem vùng nghiên cứu
 - Bản đồ cố định (khóa zoom/pan hoàn toàn)
+
+THAY ĐỔI v1.1.1:
+  [FIX]  Tên xã hiển thị đúng tiếng Việt (fix encoding Latin-1 → UTF-8)
+  [PERF] Grid nội suy giảm 300→180 (nhanh hơn ~3×)
+  [PERF] Cache kết quả IDW+mask bằng @st.cache_data (lần 2+ hiển thị ngay)
+  [PERF] Mask dùng shapely.vectorized hoặc prepared geometry batch
 """
 
 import streamlit as st
@@ -13,6 +19,7 @@ from scipy.ndimage import gaussian_filter
 from scipy.spatial import cKDTree
 from shapely.geometry import Point, MultiPolygon, Polygon
 from shapely.prepared import prep
+from shapely.wkt import loads as wkt_loads
 import geopandas as gpd
 import requests
 import xarray as xr
@@ -174,11 +181,51 @@ def load_nc_data(nc_bytes: bytes, month_idx: int):
         return None, None, None, str(e)
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# [FIX] HELPER: Chuẩn hoá chuỗi UTF-8 bị đọc nhầm sang Latin-1
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _fix_encoding(val):
+    """
+    Nếu chuỗi bị encode sai (Latin-1 đọc bytes UTF-8),
+    thử decode lại thành UTF-8 đúng.
+    Trả về chuỗi gốc nếu đã đúng hoặc không thể fix.
+    """
+    if not isinstance(val, str):
+        return val
+    try:
+        return val.encode("latin-1").decode("utf-8")
+    except (UnicodeDecodeError, UnicodeEncodeError):
+        return val  # đã đúng UTF-8 hoặc không xác định được
+
+
+def _fix_gdf_text(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """
+    Chuẩn hoá toàn bộ cột text trong GeoDataFrame:
+    - Tên cột
+    - Giá trị trong các cột object (string)
+    """
+    # Sửa tên cột
+    gdf.columns = [_fix_encoding(c) for c in gdf.columns]
+
+    # Sửa giá trị text trong từng cột
+    for col in gdf.select_dtypes(include="object").columns:
+        try:
+            gdf[col] = gdf[col].apply(_fix_encoding)
+        except Exception:
+            pass  # bỏ qua cột không sửa được
+
+    return gdf
+
+
 @st.cache_resource(show_spinner=False)
 def load_shapefiles():
     """
     Tải shapefile tỉnh (RG_34TINH) và xã vùng nghiên cứu (QN_XA_FINAL).
     Trả về (gdf_all_tinh, gdf_tinh_qn, gdf_xa).
+
+    [FIX v1.1.1] Đọc với encoding UTF-8; nếu thất bại thử utf-8-sig;
+                 sau đó gọi _fix_gdf_text() để chuẩn hoá chuỗi bị lệch encoding.
     """
     exts = [".shp", ".dbf", ".shx", ".prj"]
     tmp_dir = tempfile.mkdtemp()
@@ -195,42 +242,57 @@ def load_shapefiles():
         shp_path = os.path.join(tmp_dir, name + ".shp")
         return shp_path if ok and os.path.exists(shp_path) else None
 
+    def _read_shp_safe(path):
+        """Thử đọc shapefile với các encoding phổ biến, sau đó fix text."""
+        for enc in ("utf-8", "utf-8-sig", "latin-1", "cp1258"):
+            try:
+                gdf = gpd.read_file(path, encoding=enc)
+                if gdf.crs and gdf.crs.to_epsg() != 4326:
+                    gdf = gdf.to_crs(epsg=4326)
+                # Nếu đọc bằng latin-1 thì các chuỗi Unicode sẽ bị lệch;
+                # chạy _fix_gdf_text để decode lại đúng UTF-8
+                if enc in ("latin-1", "cp1258"):
+                    gdf = _fix_gdf_text(gdf)
+                return gdf
+            except Exception:
+                continue
+        return None
+
     gdf_all_tinh = None
     gdf_tinh_qn  = None
     gdf_xa       = None
 
+    # ── Shapefile tỉnh ──────────────────────────────────────────────────────
     try:
         path_tinh = _download_shp("RG_34TINH")
         if path_tinh:
-            gdf_all = gpd.read_file(path_tinh)
-            if gdf_all.crs and gdf_all.crs.to_epsg() != 4326:
-                gdf_all = gdf_all.to_crs(epsg=4326)
-            gdf_all_tinh = gdf_all.copy()
+            gdf_all = _read_shp_safe(path_tinh)
+            if gdf_all is not None:
+                gdf_all_tinh = gdf_all.copy()
 
-            qn_mask = None
-            for col_raw in gdf_all.columns:
-                col_up = col_raw.upper()
-                if col_up in ("TINH", "TEN_TINH", "PROVINCE", "NAME"):
-                    qn_mask = gdf_all[col_raw].str.contains(
-                        "Quảng Ninh|Quang Ninh", case=False, na=False)
-                    break
-                elif col_up in ("MATINH", "MA_TINH", "TINH_CD", "PROVCODE", "MA"):
-                    try:
-                        qn_mask = gdf_all[col_raw].astype(str).str.strip() == "22"
-                    except:
-                        pass
-                    break
-            if qn_mask is not None and qn_mask.any():
-                gdf_tinh_qn = gdf_all[qn_mask].copy()
+                qn_mask = None
+                for col_raw in gdf_all.columns:
+                    col_up = col_raw.upper()
+                    if col_up in ("TINH", "TEN_TINH", "PROVINCE", "NAME"):
+                        qn_mask = gdf_all[col_raw].str.contains(
+                            "Quảng Ninh|Quang Ninh", case=False, na=False)
+                        break
+                    elif col_up in ("MATINH", "MA_TINH", "TINH_CD", "PROVCODE", "MA"):
+                        try:
+                            qn_mask = gdf_all[col_raw].astype(str).str.strip() == "22"
+                        except Exception:
+                            pass
+                        break
+                if qn_mask is not None and qn_mask.any():
+                    gdf_tinh_qn = gdf_all[qn_mask].copy()
     except Exception:
         pass
 
+    # ── Shapefile xã ────────────────────────────────────────────────────────
     try:
         path_xa = _download_shp("QN_XA_FINAL")
         if path_xa:
-            gdf_xa = gpd.read_file(path_xa)
-            if gdf_xa.crs and gdf_xa.crs.to_epsg() != 4326:
-                gdf_xa = gdf_xa.to_crs(epsg=4326)
+            gdf_xa = _read_shp_safe(path_xa)
     except Exception:
         pass
 
@@ -256,6 +318,57 @@ def idw_knn(xi, yi, zi, query_xy, k=12, power=3.0, eps=1e-12):
         w = 1.0 / np.maximum(d, eps) ** power
         out[rest] = (w * zi[nn]).sum(axis=1) / w.sum(axis=1)
     return out
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# [PERF] CACHE kết quả IDW + Gaussian smooth + Mask
+#        Lần 2+ với cùng dữ liệu/vùng → trả về ngay, không tính lại
+# ══════════════════════════════════════════════════════════════════════════════
+
+@st.cache_data(show_spinner=False)
+def _compute_grid(lons_tuple: tuple, lats_tuple: tuple, vals_tuple: tuple,
+                  minx: float, miny: float, maxx: float, maxy: float,
+                  mask_wkt: str,
+                  GRID_N: int = 180,   # [PERF] 300→180: giảm 64% số điểm
+                  SIGMA: float = 1.2):
+    """
+    Tính lưới nội suy IDW + làm mượt Gaussian + mask theo ranh giới tỉnh.
+    Hàm này được cache: gọi lại với cùng tham số sẽ trả về ngay lập tức.
+    """
+    xi = np.array(lons_tuple)
+    yi = np.array(lats_tuple)
+    zi = np.array(vals_tuple)
+
+    # Lưới đều
+    gx_vec = np.linspace(minx, maxx, GRID_N)
+    gy_vec = np.linspace(miny, maxy, GRID_N)
+    gx, gy = np.meshgrid(gx_vec, gy_vec)
+    grid_xy = np.column_stack([gx.ravel(), gy.ravel()])
+
+    # IDW
+    gv = idw_knn(xi, yi, zi, grid_xy).reshape(gx.shape)
+
+    # Làm mượt
+    if SIGMA > 0:
+        gv = gaussian_filter(gv, sigma=SIGMA)
+
+    # Mask theo ranh giới tỉnh
+    if mask_wkt:
+        mask_shape = wkt_loads(mask_wkt)
+        try:
+            # shapely >= 1.8: dùng vectorized (nhanh nhất)
+            from shapely.vectorized import contains as shp_contains
+            mask_flat = shp_contains(mask_shape, gx.ravel(), gy.ravel()).reshape(gx.shape)
+        except (ImportError, AttributeError):
+            # fallback: prepared geometry – vẫn nhanh hơn loop Point từng cái
+            prep_s = prep(mask_shape)
+            mask_flat = np.array(
+                [prep_s.contains(Point(float(px), float(py))) for px, py in grid_xy],
+                dtype=bool,
+            ).reshape(gx.shape)
+        gv = np.where(mask_flat, gv, np.nan)
+
+    return gx_vec, gy_vec, gv
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -330,20 +443,26 @@ def gdf_boundary_to_plotly(gdf, line_color="#111111", line_width=2.0,
 
 
 def gdf_xa_labels_to_plotly(gdf_xa, name_col):
-    """Trả về Scatter trace với tên xã đặt tại centroid."""
+    """
+    Trả về Scatter trace với tên xã đặt tại centroid.
+    [FIX v1.1.1] Giá trị name_col đã được chuẩn hoá UTF-8 bởi _fix_gdf_text(),
+                 nên không cần encode thêm ở đây.
+    """
     xs, ys, texts = [], [], []
     for _, row in gdf_xa.iterrows():
         try:
             c = row.geometry.centroid
             xs.append(c.x)
             ys.append(c.y)
-            texts.append(str(row[name_col]))
+            # Đảm bảo luôn là str chuẩn UTF-8
+            label = str(row[name_col]) if row[name_col] is not None else ""
+            texts.append(label)
         except Exception:
             pass
     return go.Scatter(
         x=xs, y=ys, mode="text",
         text=texts,
-        textfont=dict(size=9, color="#111111", family="Arial, sans-serif"),
+        textfont=dict(size=9, color="#111111", family="Arial Unicode MS, Arial, sans-serif"),
         textposition="middle center",
         hoverinfo="skip",
         showlegend=True,
@@ -364,6 +483,8 @@ def interpolate_and_plot_plotly(lons, lats, vals, meta: dict, title: str,
     - Lớp xã chỉ là overlay bật/tắt.
     - Bản đồ cố định: khóa zoom/pan hoàn toàn.
     - Trả về (plotly_figure, err_str).
+
+    [PERF v1.1.1] Phần tính toán nặng (IDW + mask) được cache qua _compute_grid().
     """
 
     # ── 1. Xác định bbox theo tỉnh Quảng Ninh ──────────────────────────────
@@ -374,7 +495,7 @@ def interpolate_and_plot_plotly(lons, lats, vals, meta: dict, title: str,
         minx, miny, maxx, maxy = gdf_xa.total_bounds
         mask_shape = gdf_xa.unary_union
     else:
-        minx, miny, maxx, MAxy = 106.3, 20.6, 108.3, 21.8
+        minx, miny, maxx, maxy = 106.3, 20.6, 108.3, 21.8
         mask_shape = None
 
     BUF = 0.12
@@ -391,33 +512,14 @@ def interpolate_and_plot_plotly(lons, lats, vals, meta: dict, title: str,
     if xi.size == 0:
         return None, "Không có điểm dữ liệu trong vùng Quảng Ninh"
 
-    # ── 3. Lưới nội suy ─────────────────────────────────────────────────────
-    GRID_N, SIGMA = 300, 1.5
-    gx_vec = np.linspace(minx, maxx, GRID_N)
-    gy_vec = np.linspace(miny, maxy, GRID_N)
-    gx, gy = np.meshgrid(gx_vec, gy_vec)
-    grid_xy = np.column_stack([gx.ravel(), gy.ravel()])
-    gv = idw_knn(xi, yi, zi, grid_xy).reshape(gx.shape)
-    if SIGMA > 0:
-        gv = gaussian_filter(gv, sigma=SIGMA)
-
-    # ── 4. Mask chỉ giữ pixel trong ranh giới tỉnh Quảng Ninh ──────────────
-    if mask_shape is not None:
-        try:
-            # shapely.vectorized: nhanh hơn ~100x so với loop từng Point
-            from shapely.vectorized import contains as shp_contains
-            mask_flat = shp_contains(mask_shape, gx.ravel(), gy.ravel()).reshape(gx.shape)
-        except (ImportError, AttributeError):
-            # fallback nếu shapely cũ: dùng prepared geometry
-            prep_s = prep(mask_shape)
-            mask_1d = np.array([
-                prep_s.contains(Point(float(px), float(py)))
-                for px, py in grid_xy
-            ], dtype=bool)
-            mask_flat = mask_1d.reshape(gx.shape)
-        gv_masked = np.where(mask_flat, gv, np.nan)
-    else:
-        gv_masked = gv
+    # ── 3+4. Lưới nội suy + mask (cached) ──────────────────────────────────
+    # Chuyển sang tuple để cache_data có thể hash được
+    mask_wkt = mask_shape.wkt if mask_shape is not None else ""
+    gx_vec, gy_vec, gv_masked = _compute_grid(
+        tuple(xi.tolist()), tuple(yi.tolist()), tuple(zi.tolist()),
+        float(minx), float(miny), float(maxx), float(maxy),
+        mask_wkt,
+    )
 
     # ── 5. Clip giá trị vào khoảng levels ──────────────────────────────────
     levels = sorted(meta.get("levels", list(range(-5, 6))))
@@ -433,7 +535,7 @@ def interpolate_and_plot_plotly(lons, lats, vals, meta: dict, title: str,
     # ── 7. Xây dựng figure Plotly ───────────────────────────────────────────
     fig = go.Figure()
 
-    # 7a. Viền các tỉnh lân cận (bỏ fill xám, chỉ giữ đường viền mỏng)
+    # 7a. Viền các tỉnh lân cận (chỉ đường viền mỏng, không fill)
     if gdf_all_tinh is not None and not gdf_all_tinh.empty:
         for tr in gdf_boundary_to_plotly(gdf_all_tinh,
                                           line_color="#aab0b8", line_width=0.5,
@@ -489,6 +591,7 @@ def interpolate_and_plot_plotly(lons, lats, vals, meta: dict, title: str,
 
     # 7d. Ranh giới & tên xã (overlay bật/tắt qua legend)
     if gdf_xa is not None and not gdf_xa.empty:
+        # Tìm cột tên xã (đã được fix encoding trong load_shapefiles)
         xa_name_col = None
         for col in gdf_xa.columns:
             if col.upper() in ("TEN_XA", "TENXA", "XA", "NAME", "TEN"):
@@ -532,9 +635,8 @@ def interpolate_and_plot_plotly(lons, lats, vals, meta: dict, title: str,
                    x=0.5, xanchor="center"),
         xaxis=dict(
             title="Kinh độ (°E)",
-            # Fix cứng range – không thay đổi khi zoom/pan
             range=[plot_minx, plot_maxx],
-            fixedrange=True,          # ← KHÓA trục X
+            fixedrange=True,
             tickformat=".2f",
             scaleanchor="y", scaleratio=1,
             constrain="domain",
@@ -543,7 +645,7 @@ def interpolate_and_plot_plotly(lons, lats, vals, meta: dict, title: str,
         yaxis=dict(
             title="Vĩ độ (°N)",
             range=[plot_miny, plot_maxy],
-            fixedrange=True,          # ← KHÓA trục Y
+            fixedrange=True,
             tickformat=".2f",
             showgrid=True, gridcolor="rgba(180,180,180,0.3)", gridwidth=0.5,
         ),
@@ -558,7 +660,6 @@ def interpolate_and_plot_plotly(lons, lats, vals, meta: dict, title: str,
         plot_bgcolor="white",
         paper_bgcolor="white",
         hovermode="closest",
-        # dragmode=False → tắt hoàn toàn kéo thả
         dragmode=False,
     )
 
@@ -623,10 +724,9 @@ def display_panel(state_key: str):
     if result.get("error"):
         st.error(f"❌ {result['error']}")
         return
-    # Hiển thị Plotly chart – bản đồ cố định, chỉ hover
     st.plotly_chart(result["fig"], use_container_width=True,
                     config={
-                        "scrollZoom": False,        # tắt zoom bằng scroll
+                        "scrollZoom": False,
                         "displayModeBar": True,
                         "modeBarButtonsToRemove": [
                             "zoom2d", "pan2d", "zoomIn2d", "zoomOut2d",
@@ -787,7 +887,7 @@ with st.sidebar:
     st.markdown("Phòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu")
     st.markdown("Viện Khoa học Khí tượng Thủy văn Môi trường và Biển")
     st.markdown("---")
-    st.markdown("*Phiên bản 1.1.0 – 06/2026*")
+    st.markdown("*Phiên bản 1.1.1 – 06/2026*")
 
 # ── Router ──
 if   menu == "🏠 Tổng quan":                          page_tong_quan()
