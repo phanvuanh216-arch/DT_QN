@@ -953,7 +953,7 @@ def build_climate_normal_chart(commune_name, df_r, df_t, forecast_months):
 
     fig.update_layout(
         title=dict(
-            text="<b>Diễn biến khí hậu trung bình nhiều năm (1981–2024)</b>",
+            text="<b>Đặc trưng khí hậu trung bình nhiều năm (1981–2024)</b>",
             font=dict(size=13, family="Arial"), x=0.5, xanchor="center",
         ),
         xaxis=dict(
@@ -1003,7 +1003,7 @@ def render_xacsuat_table(xacsuat_data, month_labels):
         return str(int(round(v))) if v is not None else "—"
 
     rows_T = ["Nhiệt độ trung bình nhiều năm (%)"]
-    rows_R = ["Lượng mưa trung bình nhiều năm (mm)"]
+    rows_R = ["Lượng mưa trung bình nhiều năm (%)"]
 
     for lbl in month_labels:
         probs = xacsuat_data.get(lbl, {})
