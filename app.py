@@ -1031,7 +1031,7 @@ def render_xacsuat_table(xacsuat_data, month_labels):
     html += "</tr></thead><tbody>"
 
     for row_data, var_label in [(rows_T, "Nhiệt độ TB nhiều năm (%)"),
-                                 (rows_R, "Lượng mưa TB nhiều năm (mm)")]:
+                                 (rows_R, "Lượng mưa TB nhiều năm (%)")]:
         html += f'<tr><td style="border:1px solid #aaa; padding:4px 8px; background:#e8f4f8; font-weight:bold;">{var_label}</td>'
         for val in row_data[1:]:
             html += f'<td style="border:1px solid #aaa; padding:4px 8px; text-align:center;">{val}</td>'
@@ -1471,7 +1471,7 @@ def render_commune_bulletin(commune_name, crops, period, month_labels,
     else:
         # Fallback: display placeholder table structure
         tbl_data = {
-            "Biến": ["Nhiệt độ TB nhiều năm (%)", "Lượng mưa TB nhiều năm (mm)"],
+            "Biến": ["Nhiệt độ TB nhiều năm (%)", "Lượng mưa TB nhiều năm (%)"],
         }
         for lbl in month_labels:
             m = lbl.replace("Tháng ","").split("/")[0]
