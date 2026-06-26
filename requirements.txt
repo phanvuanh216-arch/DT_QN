@@ -15,4 +15,3 @@ branca
 plotly
 pdfkit
 kaleido
-wkhtmltopdf
