@@ -170,7 +170,7 @@ COMMUNE_COL_MAP = {
     "Uông Bí":    "uongbi",
     "An Sinh":    "ansinh",
     "Đông Triều": "dongtrieu",
-    "Bình Khuê":  "binhkhe",
+    "Bình Khê":  "binhkhe",
     "Mạo Khê":    "maokhe",
     "Hoàng Quế":  "hoangque",
 }
