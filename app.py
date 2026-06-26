@@ -1,9 +1,14 @@
 # -*- coding: utf-8 -*-
 """
 Ứng dụng Streamlit - Hệ thống Bản tin Khí hậu Nông nghiệp Quảng Ninh
-THAY ĐỔI v1.3.0 – MODULE BẢN TIN CẢNH BÁO RỦI RO KHÍ HẬU:
-  [NEW]  Module Bản tin xã: đầy đủ biểu đồ TBNN, dự báo xác suất, bảng rủi ro
-  [PERF] Giữ nguyên toàn bộ tối ưu v1.2.0 cho module Dự báo khí hậu mùa
+THAY ĐỔI v1.3.1 – SỬA MODULE XÁC SUẤT:
+  [FIX]  load_xacsuat_for_commune: đọc đúng 6 file NC riêng biệt
+         XSHC/XSCC/XSVC × T2m/R thay vì xacsuat.T2m.nc / xacsuat.R.nc
+  [FIX]  Trích xuất giá trị tại tọa độ (lon, lat) của xã bằng nearest-neighbor
+  [FIX]  load_era5_data: trả thêm commune_coords {col_key: (lon, lat)} từ rows 1-2
+  [NEW]  _get_commune_coords: helper lấy tọa độ xã từ ERA5 raw
+  [NEW]  _extract_value_at_point: nearest-neighbor extraction từ NC tại 1 điểm
+  [KEEP] Giữ nguyên toàn bộ code v1.3.0 ngoài các phần trên
 """
 
 import streamlit as st
@@ -86,6 +91,20 @@ ERA5_R_URL      = "https://raw.githubusercontent.com/phanvuanh216-arch/DT_QN/mai
 ERA5_T_URL      = "https://raw.githubusercontent.com/phanvuanh216-arch/DT_QN/main/T2m_ERA5_QM_corrected.xlsx"
 ECOLOGY_URL     = "https://raw.githubusercontent.com/phanvuanh216-arch/DT_QN/main/B%E1%BA%A3ng%20sinh%20th%C3%A1i%20v%C3%A0%20m%C3%B9a%20v%E1%BB%A5_19-6.xlsx"
 
+# Tên 6 file xác suất (prefix không có period)
+XACSUAT_PREFIXES = {
+    "T": {
+        "thap":  "XSHC.T2m",
+        "xapxi": "XSCC.T2m",
+        "caohon":"XSVC.T2m",
+    },
+    "R": {
+        "thap":  "XSHC.R",
+        "xapxi": "XSCC.R",
+        "caohon":"XSVC.R",
+    },
+}
+
 CLIMATE_VARS = {
     "ano.T2m":  {"label": "Nhiệt độ trung bình (T2m)", "unit": "°C",  "cmap": "RdBu_r", "levels": list(range(-5, 6))},
     "ano.Tx":   {"label": "Nhiệt độ tối cao (Tx)",      "unit": "°C",  "cmap": "RdBu_r", "levels": list(range(-5, 6))},
@@ -152,7 +171,7 @@ COMMUNE_COL_MAP = {
     "Đường Hoa":  "duonghoa",
     "Quảng Đức":  "quangduc",
     "Cái Chiên":  "caichien",
-    "Quảng Tân":  "quangtan" ,
+    "Quảng Tân":  "quangtan",
     "Đầm Hà":     "damha",
     "Hải Hòa":    "haihoa",
     "Tiên Yên":   "tienyen",
@@ -170,13 +189,12 @@ COMMUNE_COL_MAP = {
     "Uông Bí":    "uongbi",
     "An Sinh":    "ansinh",
     "Đông Triều": "dongtrieu",
-    "Bình Khê":  "binhkhe",
+    "Bình Khuê":  "binhkhe",
     "Mạo Khê":    "maokhe",
     "Hoàng Quế":  "hoangque",
 }
 
 # Lúa - chu kỳ sinh trưởng theo từng thập (T1,T2,T3) của tháng 6,7,8
-# Based on Vụ mùa (trà mùa sớm): gieo 05/6 → thu hoạch 20/10
 LUA_GROWTH_STAGES = {
     "T1/6": "Gieo, nảy mầm",
     "T2/6": "Gieo, nảy mầm",
@@ -201,9 +219,7 @@ RAU_GROWTH_STAGES = {
     "T3/8": "Thu hoạch",
 }
 
-# Ngưỡng rủi ro nhiệt độ (°C) cho từng giai đoạn cây lúa
 LUA_TEMP_RISK = {
-    # (stage): (too_cold, too_hot)
     "Gieo, nảy mầm": (10, 45),
     "Mạ":             (12, 35),
     "Đẻ nhánh":       (9,  33),
@@ -212,16 +228,11 @@ LUA_TEMP_RISK = {
     "Trỗ – thụ phấn": (22, 38),
 }
 
-# THI thresholds for pigs (using T and RH)
-# THI = (1.8*T + 32) - [(0.55 - 0.0055*RH) * (1.8*T - 26)]
-PIG_THI_RISK = {"normal": 74, "warn": 78, "danger": 83, "critical": 84}
+PIG_THI_RISK      = {"normal": 74, "warn": 78, "danger": 83, "critical": 84}
+CHICKEN_THI_RISK  = {"normal": 70, "warn": 75, "danger": 81, "critical": 81}
 
-# THI thresholds for chickens
-# THI = T (simplified from Purswell et al. for mature chickens)
-CHICKEN_THI_RISK = {"normal": 70, "warn": 75, "danger": 81, "critical": 81}
-
-RISK_LABELS = {0: "—", 1: "Thấp", 2: "Trung bình", 3: "Cao"}
-RISK_COLORS = {0: "#f0f0f0", 1: "#c8f7c5", 2: "#fff176", 3: "#ff8a65"}
+RISK_LABELS  = {0: "—",   1: "Thấp", 2: "Trung bình", 3: "Cao"}
+RISK_COLORS  = {0: "#f0f0f0", 1: "#c8f7c5", 2: "#fff176", 3: "#ff8a65"}
 
 DECADAL_LABELS = ["T1/6","T2/6","T3/6","T1/7","T2/7","T3/7","T1/8","T2/8","T3/8"]
 
@@ -378,37 +389,61 @@ def build_boundary_traces_cached(_gdf_all_tinh, _gdf_tinh_qn, _gdf_xa):
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def load_era5_data():
-    """Load ERA5 bias-corrected temperature and rainfall for all communes."""
+    """
+    Load ERA5 bias-corrected temperature and rainfall for all communes.
+    Returns (df_r, df_t, commune_coords)
+      df_r, df_t : DataFrames with daily data (rows 3+ of Excel)
+      commune_coords : dict {col_key: (lon, lat)} extracted from rows 1 & 2
+    """
     try:
         r_r = requests.get(ERA5_R_URL, timeout=30)
         r_t = requests.get(ERA5_T_URL, timeout=30)
         if r_r.status_code != 200 or r_t.status_code != 200:
-            return None, None
+            return None, None, {}
 
-        df_r = pd.read_excel(io.BytesIO(r_r.content), sheet_name=0, header=None)
-        df_t = pd.read_excel(io.BytesIO(r_t.content), sheet_name=0, header=None)
+        # ── Rainfall ──────────────────────────────────────────────────────────
+        df_r_raw = pd.read_excel(io.BytesIO(r_r.content), sheet_name=0, header=None)
+        cols_r   = df_r_raw.iloc[0].tolist()
+        df_r_raw.columns = cols_r
 
-        # Row 0 = col names, rows 1-2 = lon/lat metadata, rows 3+ = data
-        cols_r = df_r.iloc[0].tolist()
-        df_r.columns = cols_r
-        df_r = df_r.iloc[3:].copy()
-        df_r = df_r.rename(columns={"year": "year", "month": "month", "day": "day"})
+        # Extract commune lon/lat from rows 1 & 2 (use rainfall file)
+        commune_coords = {}
+        row_lon = df_r_raw.iloc[1]  # row index 1 = second raw row
+        row_lat = df_r_raw.iloc[2]  # row index 2 = third raw row
+        skip_keys = {"year", "month", "day", ""}
+        for col in cols_r:
+            key = str(col).lower().strip()
+            if key in skip_keys:
+                continue
+            try:
+                lon_val = float(row_lon[col])
+                lat_val = float(row_lat[col])
+                if np.isfinite(lon_val) and np.isfinite(lat_val):
+                    commune_coords[key] = (lon_val, lat_val)
+            except (ValueError, TypeError, KeyError):
+                pass
+
+        # Daily data starts at row 3 (0-indexed)
+        df_r = df_r_raw.iloc[3:].copy()
         for c in ["year", "month", "day"]:
             df_r[c] = pd.to_numeric(df_r[c], errors="coerce")
         df_r = df_r.dropna(subset=["year", "month", "day"])
-        df_r[["year","month","day"]] = df_r[["year","month","day"]].astype(int)
+        df_r[["year", "month", "day"]] = df_r[["year", "month", "day"]].astype(int)
 
-        cols_t = df_t.iloc[0].tolist()
-        df_t.columns = cols_t
-        df_t = df_t.iloc[3:].copy()
+        # ── Temperature ───────────────────────────────────────────────────────
+        df_t_raw = pd.read_excel(io.BytesIO(r_t.content), sheet_name=0, header=None)
+        cols_t   = df_t_raw.iloc[0].tolist()
+        df_t_raw.columns = cols_t
+        df_t = df_t_raw.iloc[3:].copy()
         for c in ["year", "month", "day"]:
             df_t[c] = pd.to_numeric(df_t[c], errors="coerce")
         df_t = df_t.dropna(subset=["year", "month", "day"])
-        df_t[["year","month","day"]] = df_t[["year","month","day"]].astype(int)
+        df_t[["year", "month", "day"]] = df_t[["year", "month", "day"]].astype(int)
 
-        return df_r, df_t
-    except Exception as e:
-        return None, None
+        return df_r, df_t, commune_coords
+
+    except Exception:
+        return None, None, {}
 
 
 def get_commune_monthly_climate(commune_name, df_r, df_t):
@@ -420,27 +455,23 @@ def get_commune_monthly_climate(commune_name, df_r, df_t):
     if col_key is None or df_r is None or df_t is None:
         return {}
 
-    # Filter 1989-2018
     mask_r = (df_r["year"] >= 1989) & (df_r["year"] <= 2018)
     mask_t = (df_t["year"] >= 1989) & (df_t["year"] <= 2018)
 
-    # Check column presence
     r_col = None
     t_col = None
     for c in df_r.columns:
         if str(c).lower().strip() == col_key.lower():
-            r_col = c
-            break
+            r_col = c; break
     for c in df_t.columns:
         if str(c).lower().strip() == col_key.lower():
-            t_col = c
-            break
+            t_col = c; break
 
     if r_col is None or t_col is None:
         return {}
 
-    sub_r = df_r[mask_r][["year","month","day", r_col]].copy()
-    sub_t = df_t[mask_t][["year","month","day", t_col]].copy()
+    sub_r = df_r[mask_r][["year", "month", "day", r_col]].copy()
+    sub_t = df_t[mask_t][["year", "month", "day", t_col]].copy()
     sub_r[r_col] = pd.to_numeric(sub_r[r_col], errors="coerce")
     sub_t[t_col] = pd.to_numeric(sub_t[t_col], errors="coerce")
 
@@ -448,11 +479,12 @@ def get_commune_monthly_climate(commune_name, df_r, df_t):
     for m in range(1, 13):
         r_m = sub_r[sub_r["month"] == m]
         t_m = sub_t[sub_t["month"] == m]
-        # Monthly rainfall = average of (annual sum per year) for that month
         rain_monthly = r_m.groupby("year")[r_col].sum().mean()
         temp_monthly = t_m[t_col].mean()
-        result[m] = {"T": round(float(temp_monthly), 1) if not np.isnan(temp_monthly) else 0,
-                     "R": round(float(rain_monthly), 1) if not np.isnan(rain_monthly) else 0}
+        result[m] = {
+            "T": round(float(temp_monthly), 1) if not np.isnan(temp_monthly) else 0,
+            "R": round(float(rain_monthly), 1) if not np.isnan(rain_monthly) else 0,
+        }
     return result
 
 
@@ -516,7 +548,75 @@ def load_nc_data(nc_bytes: bytes, month_idx: int):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# LOAD PROBABILITY DATA (xác suất T2m và R)
+# XÁC SUẤT – HELPER: TRÍCH XUẤT GIÁ TRỊ TẠI MỘT ĐIỂM (lon, lat)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _extract_value_at_point(nc_bytes: bytes, month_idx: int,
+                             lon_c: float, lat_c: float) -> float | None:
+    """
+    Mở một file NC (xác suất hoặc member), chọn time slice month_idx,
+    rồi lấy giá trị tại điểm gần nhất với (lon_c, lat_c).
+    Trả về float hoặc None nếu lỗi / không có dữ liệu.
+    """
+    if nc_bytes is None:
+        return None
+    with tempfile.NamedTemporaryFile(suffix=".nc", delete=False) as f:
+        f.write(nc_bytes)
+        tmp = f.name
+    try:
+        ds = xr.open_dataset(tmp)
+        coord_names = {c.lower() for c in ds.coords}
+        data_vars   = [v for v in ds.data_vars if v.lower() not in coord_names]
+        if not data_vars:
+            ds.close(); os.unlink(tmp); return None
+
+        da = ds[data_vars[0]]
+
+        # Chọn time slice
+        time_dims = [d for d in da.dims if 'time' in d.lower() or 'month' in d.lower()]
+        if time_dims:
+            n_t = da.sizes[time_dims[0]]
+            da  = da.isel({time_dims[0]: min(month_idx, n_t - 1)})
+
+        # Lấy mảng lat/lon
+        lat_dims = [d for d in da.dims if 'lat' in d.lower() or d == 'y']
+        lon_dims = [d for d in da.dims if 'lon' in d.lower() or d == 'x']
+        if not lat_dims or not lon_dims:
+            ds.close(); os.unlink(tmp); return None
+
+        lat_arr = da[lat_dims[0]].values
+        lon_arr = da[lon_dims[0]].values
+        vals    = da.values  # shape: (n_lat, n_lon) after time sel
+
+        if lon_arr.ndim == 1:
+            lon_2d, lat_2d = np.meshgrid(lon_arr, lat_arr)
+        else:
+            lon_2d, lat_2d = lon_arr, lat_arr
+
+        flat_lon = lon_2d.ravel()
+        flat_lat = lat_2d.ravel()
+        flat_val = vals.ravel()
+
+        # Nearest-neighbor bằng cKDTree
+        ok_mask = np.isfinite(flat_val) & (np.abs(flat_val) < 1e15)
+        if not ok_mask.any():
+            ds.close(); os.unlink(tmp); return None
+
+        tree  = cKDTree(np.column_stack([flat_lon[ok_mask], flat_lat[ok_mask]]))
+        _, idx = tree.query([lon_c, lat_c], k=1)
+        value = float(flat_val[ok_mask][idx])
+
+        ds.close(); os.unlink(tmp)
+        return value if np.isfinite(value) else None
+
+    except Exception:
+        try: os.unlink(tmp)
+        except: pass
+        return None
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# XÁC SUẤT – LOAD VÀ CACHE 6 FILE NC
 # ══════════════════════════════════════════════════════════════════════════════
 
 @st.cache_data(ttl=1800, show_spinner=False)
@@ -530,87 +630,78 @@ def fetch_xacsuat_periods() -> list:
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def load_xacsuat_for_commune(period: str, commune_name: str, month_offsets=(1,2,3)):
+def _download_xacsuat_nc(period: str, prefix: str) -> bytes | None:
     """
-    Load probability NC files for T2m and R.
-    Returns dict: {month_label: {"T": (thap, xapxi, caohon), "R": (thap, xapxi, caohon)}}
-    Reads commune value via IDW from nearest grid point.
+    Tải một file xác suất.
+    Ví dụ: period="202506", prefix="XSHC.T2m"
+    → URL: .../xacsuat/domain_d02/202506/XSHC.T2m.202506.nc
     """
-    lon_c = None
-    lat_c = None
-    # Try to get from ERA5 data (stored in col mapping)
-    # Fall back to approximate lookup
-    col_key = COMMUNE_COL_MAP.get(commune_name, "")
+    url = f"{XACSUAT_URL}{period}/{prefix}.{period}.nc"
+    try:
+        resp = requests.get(url, timeout=60)
+        return resp.content if resp.status_code == 200 else None
+    except Exception:
+        return None
 
-    result = {}
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def load_xacsuat_for_commune(period: str, commune_name: str,
+                              lon_c: float | None, lat_c: float | None,
+                              month_offsets: tuple = (1, 2, 3)):
+    """
+    Tải 6 file NC xác suất cho kỳ `period` và trích xuất giá trị tại
+    tọa độ (lon_c, lat_c) của xã.
+
+    Tên file:
+      Nhiệt độ: XSHC.T2m.{period}.nc, XSCC.T2m.{period}.nc, XSVC.T2m.{period}.nc
+      Mưa     : XSHC.R.{period}.nc,   XSCC.R.{period}.nc,   XSVC.R.{period}.nc
+
+    Trả về:
+      {month_label: {"T": (thap, xapxi, caohon), "R": (thap, xapxi, caohon)}}
+      Giá trị là xác suất % tại điểm xã (làm tròn nguyên).
+      Nếu không tải được file → None thay cho giá trị.
+    """
     yr, mo = int(period[:4]), int(period[4:])
 
+    # Tải 6 file (cache theo period, không phụ thuộc commune)
+    nc_cache = {}
+    for var_key, prefixes in XACSUAT_PREFIXES.items():     # var_key: "T" hoặc "R"
+        for cat_key, prefix in prefixes.items():            # cat_key: "thap","xapxi","caohon"
+            nc_cache[(var_key, cat_key)] = _download_xacsuat_nc(period, prefix)
+
+    result = {}
     for offset in month_offsets:
         m2 = mo + offset
         y2 = yr + (m2 - 1) // 12
         m2 = ((m2 - 1) % 12) + 1
-        label = f"Tháng {m2:02d}/{y2}"
+        label     = f"Tháng {m2:02d}/{y2}"
+        # month_idx = offset - 1 (0-based, giả định mỗi file có 3 time steps)
+        month_idx = offset - 1
 
-        t_bytes = download_nc(period, "xacsuat.T2m", XACSUAT_URL)
-        r_bytes = download_nc(period, "xacsuat.R", XACSUAT_URL)
+        probs = {}
+        for var_key in ("T", "R"):
+            vals_3 = []
+            for cat_key in ("thap", "xapxi", "caohon"):
+                nc_bytes = nc_cache.get((var_key, cat_key))
+                if nc_bytes and lon_c is not None and lat_c is not None:
+                    v = _extract_value_at_point(nc_bytes, month_idx, lon_c, lat_c)
+                else:
+                    v = None
+                vals_3.append(v)
 
-        t_prob = _extract_prob_at_commune(t_bytes, offset - 1) if t_bytes else None
-        r_prob = _extract_prob_at_commune(r_bytes, offset - 1) if r_bytes else None
+            # Chuẩn hóa về % (nếu giá trị đã là phần trăm 0–100 thì giữ nguyên;
+            # nếu là xác suất 0–1 thì nhân 100)
+            valid = [v for v in vals_3 if v is not None]
+            if valid and max(valid) <= 1.05:
+                vals_3 = [round(v * 100) if v is not None else None for v in vals_3]
+            else:
+                vals_3 = [round(v) if v is not None else None for v in vals_3]
 
-        result[label] = {
-            "T": t_prob if t_prob else (None, None, None),
-            "R": r_prob if r_prob else (None, None, None),
-        }
+            probs[var_key] = tuple(vals_3)  # (thap, xapxi, caohon)
+
+        result[label] = probs
 
     return result
-
-
-def _extract_prob_at_commune(nc_bytes, month_idx):
-    """Extract (thấp, xấp xỉ, cao hơn) probability from NC bytes at month_idx."""
-    if nc_bytes is None:
-        return None
-    with tempfile.NamedTemporaryFile(suffix=".nc", delete=False) as f:
-        f.write(nc_bytes); tmp = f.name
-    try:
-        ds = xr.open_dataset(tmp)
-        data_vars = [v for v in ds.data_vars]
-        if not data_vars:
-            ds.close(); os.unlink(tmp); return None
-
-        # Expect 3 variables: below-normal, near-normal, above-normal
-        # or 3 dimensions in single var (prob_dim, time, lat, lon)
-        da = ds[data_vars[0]]
-        time_dims = [d for d in da.dims if 'time' in d.lower() or 'month' in d.lower()]
-
-        # If has category dimension: shape = (3, months, lat, lon) or (months, 3, lat, lon)
-        cat_dims = [d for d in da.dims if 'cat' in d.lower() or 'class' in d.lower() or 'prob' in d.lower()]
-
-        vals = []
-        if len(data_vars) >= 3:
-            # 3 separate variables for 3 categories
-            for var in data_vars[:3]:
-                da_v = ds[var]
-                if time_dims:
-                    da_v = da_v.isel({time_dims[0]: min(month_idx, da_v.sizes[time_dims[0]] - 1)})
-                vals.append(float(da_v.mean().values))
-        elif cat_dims:
-            for i in range(3):
-                da_v = da.isel({cat_dims[0]: i})
-                if time_dims:
-                    da_v = da_v.isel({time_dims[0]: min(month_idx, da_v.sizes[time_dims[0]] - 1)})
-                vals.append(float(da_v.mean().values))
-        else:
-            ds.close(); os.unlink(tmp); return None
-
-        ds.close(); os.unlink(tmp)
-        if len(vals) == 3:
-            total = sum(vals) if sum(vals) > 0 else 1
-            return tuple(round(v/total*100) for v in vals)
-        return None
-    except Exception:
-        try: os.unlink(tmp)
-        except: pass
-        return None
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -618,11 +709,10 @@ def _extract_prob_at_commune(nc_bytes, month_idx):
 # ══════════════════════════════════════════════════════════════════════════════
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def load_member_decadal(period: str, month_offsets=(1,2,3)):
+def load_member_decadal(period: str, month_offsets=(1, 2, 3)):
     """
     Load member-mean daily NC files (T2m, RH2m, R) and compute decadal means.
-    Returns DataFrame with columns: [decade, T2m_mean, RH2m_mean, R_sum]
-    Decade label: T1/6, T2/6, T3/6, T1/7, ...
+    Returns DataFrame with columns: [decade, T2m, RH2m, R]
     """
     yr, mo = int(period[:4]), int(period[4:])
     rows = []
@@ -633,27 +723,22 @@ def load_member_decadal(period: str, month_offsets=(1,2,3)):
         m2 = ((m2 - 1) % 12) + 1
 
         for decade_idx, decade_label in enumerate(["T1", "T2", "T3"]):
-            label = f"{decade_label}/{m2}"
-            t_bytes = download_nc(period, "T2m", MEMBER_URL)
-            rh_bytes = download_nc(period, "RH2m", MEMBER_URL)
-            r_bytes = download_nc(period, "R", MEMBER_URL)
+            label   = f"{decade_label}/{m2}"
+            t_bytes = download_nc(period, "T2m",  MEMBER_URL)
+            rh_bytes= download_nc(period, "RH2m", MEMBER_URL)
+            r_bytes = download_nc(period, "R",    MEMBER_URL)
 
-            t_val = _extract_decadal_mean(t_bytes, offset - 1, decade_idx, is_sum=False)
+            t_val  = _extract_decadal_mean(t_bytes,  offset - 1, decade_idx, is_sum=False)
             rh_val = _extract_decadal_mean(rh_bytes, offset - 1, decade_idx, is_sum=False)
-            r_val = _extract_decadal_mean(r_bytes, offset - 1, decade_idx, is_sum=True)
+            r_val  = _extract_decadal_mean(r_bytes,  offset - 1, decade_idx, is_sum=True)
 
-            rows.append({
-                "decade": label,
-                "T2m": t_val,
-                "RH2m": rh_val,
-                "R": r_val,
-            })
+            rows.append({"decade": label, "T2m": t_val, "RH2m": rh_val, "R": r_val})
 
     return pd.DataFrame(rows)
 
 
 def _extract_decadal_mean(nc_bytes, month_idx, decade_idx, is_sum=False):
-    """Extract spatial mean for a given month and decade (0=first 10days, 1=middle, 2=last)."""
+    """Extract spatial mean for a given month and decade."""
     if nc_bytes is None:
         return None
     with tempfile.NamedTemporaryFile(suffix=".nc", delete=False) as f:
@@ -667,14 +752,10 @@ def _extract_decadal_mean(nc_bytes, month_idx, decade_idx, is_sum=False):
         time_dims = [d for d in da.dims if 'time' in d.lower() or 'day' in d.lower()]
         if time_dims:
             n_days = da.sizes[time_dims[0]]
-            # Assuming daily data for the full month; slice to decade
-            start = decade_idx * 10
-            end = min(start + 10, n_days)
-            da = da.isel({time_dims[0]: slice(start, end)})
-        if is_sum:
-            val = float(da.sum().values)
-        else:
-            val = float(da.mean().values)
+            start  = decade_idx * 10
+            end    = min(start + 10, n_days)
+            da     = da.isel({time_dims[0]: slice(start, end)})
+        val = float(da.sum().values) if is_sum else float(da.mean().values)
         ds.close(); os.unlink(tmp)
         return round(val, 1) if np.isfinite(val) else None
     except Exception:
@@ -691,30 +772,21 @@ def compute_pig_thi(T, RH):
     """THI = (1.8*T + 32) - [(0.55 - 0.0055*RH) * (1.8*T - 26)]"""
     if T is None or RH is None:
         return None
-    thi = (1.8 * T + 32) - ((0.55 - 0.0055 * RH) * (1.8 * T - 26))
-    return round(thi, 1)
+    return round((1.8 * T + 32) - ((0.55 - 0.0055 * RH) * (1.8 * T - 26)), 1)
 
 
 def thi_to_risk_pig(thi):
-    if thi is None:
-        return 0
-    if thi < 75:
-        return 1
-    if thi <= 78:
-        return 2
-    if thi <= 83:
-        return 3
+    if thi is None: return 0
+    if thi < 75:    return 1
+    if thi <= 78:   return 2
     return 3
 
 
 def temp_to_risk_lua(T, stage):
-    """Return 1 (low) / 2 (medium) / 3 (high) risk for rice based on temp."""
     if T is None or stage not in LUA_TEMP_RISK:
         return 0
     cold_thresh, hot_thresh = LUA_TEMP_RISK[stage]
-    if T < cold_thresh:
-        return 3
-    if T >= hot_thresh:
+    if T < cold_thresh or T >= hot_thresh:
         return 3
     if T < cold_thresh + 2 or T >= hot_thresh - 3:
         return 2
@@ -722,68 +794,44 @@ def temp_to_risk_lua(T, stage):
 
 
 def rain_to_risk(R_sum, threshold_drought=20, threshold_flood=150):
-    """Simple rainfall risk: drought or flood."""
-    if R_sum is None:
-        return 0
-    if R_sum < threshold_drought:
-        return 3   # drought
-    if R_sum > threshold_flood:
-        return 3   # flood
-    if R_sum < threshold_drought + 20 or R_sum > threshold_flood - 50:
-        return 2
+    if R_sum is None: return 0
+    if R_sum < threshold_drought or R_sum > threshold_flood: return 3
+    if R_sum < threshold_drought + 20 or R_sum > threshold_flood - 50: return 2
     return 1
 
 
 def compute_decade_risks(df_decadal):
-    """
-    Given decadal forecast DataFrame, compute risk levels for each crop per decade.
-    Returns dict: {crop: {decade_label: risk_level}}
-    """
     if df_decadal is None or df_decadal.empty:
         return {}
-
     risks = {crop: {} for crop in ["Lúa", "Rau", "Lợn", "Gà"]}
-
     for _, row in df_decadal.iterrows():
         decade = row["decade"]
-        T = row.get("T2m")
+        T  = row.get("T2m")
         RH = row.get("RH2m", 75)
-        R = row.get("R")
+        R  = row.get("R")
 
-        # Lúa
-        stage = LUA_GROWTH_STAGES.get(decade, "")
-        t_risk = temp_to_risk_lua(T, stage) if stage else 0
-        r_risk = rain_to_risk(R)
+        stage   = LUA_GROWTH_STAGES.get(decade, "")
+        t_risk  = temp_to_risk_lua(T, stage) if stage else 0
+        r_risk  = rain_to_risk(R)
         risks["Lúa"][decade] = max(t_risk, r_risk)
 
-        # Rau
         t_risk_rau = 0
         if T is not None:
-            if T > 38 or T < 10:
-                t_risk_rau = 3
-            elif T > 35 or T < 15:
-                t_risk_rau = 2
-            else:
-                t_risk_rau = 1
-        risks["Rau"][decade] = max(t_risk_rau, rain_to_risk(R))
+            if T > 38 or T < 10: t_risk_rau = 3
+            elif T > 35 or T < 15: t_risk_rau = 2
+            else: t_risk_rau = 1
+        risks["Rau"][decade] = max(t_risk_rau, r_risk)
 
-        # Lợn
         thi = compute_pig_thi(T, RH if RH else 75)
         risks["Lợn"][decade] = thi_to_risk_pig(thi)
 
-        # Gà
         t_risk_ga = 0
         if T is not None:
-            if T > 35:
-                t_risk_ga = 3
-            elif T > 30:
-                t_risk_ga = 2
-            elif T < 15:
-                t_risk_ga = 2
-            else:
-                t_risk_ga = 1
-        risks["Gà"][decade] = max(t_risk_ga, rain_to_risk(R, threshold_drought=10, threshold_flood=100))
-
+            if T > 35: t_risk_ga = 3
+            elif T > 30 or T < 15: t_risk_ga = 2
+            else: t_risk_ga = 1
+        risks["Gà"][decade] = max(t_risk_ga,
+                                   rain_to_risk(R, threshold_drought=10, threshold_flood=100))
     return risks
 
 
@@ -792,58 +840,35 @@ def compute_decade_risks(df_decadal):
 # ══════════════════════════════════════════════════════════════════════════════
 
 def build_climate_normal_chart(commune_name, df_r, df_t, forecast_months):
-    """
-    Build combined bar (rainfall) + line (temperature) chart like Image 1.
-    Fixed for all 12 months, highlight forecast period.
-    forecast_months: list of month numbers to highlight
-    """
     clim = get_commune_monthly_climate(commune_name, df_r, df_t)
     if not clim:
         return None
 
-    months_vn = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
-    R_vals = [clim.get(m, {}).get("R", 0) for m in range(1, 13)]
-    T_vals = [clim.get(m, {}).get("T", 0) for m in range(1, 13)]
-
-    bar_colors = ["#1565c0" if (m not in forecast_months) else "#e53935" for m in range(1, 13)]
+    months_vn  = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+    R_vals     = [clim.get(m, {}).get("R", 0) for m in range(1, 13)]
+    T_vals     = [clim.get(m, {}).get("T", 0) for m in range(1, 13)]
+    bar_colors = ["#e53935" if (m in forecast_months) else "#1565c0" for m in range(1, 13)]
 
     fig = go.Figure()
-
     fig.add_trace(go.Bar(
-        x=months_vn, y=R_vals,
-        name="Rainfall",
-        marker_color=bar_colors,
-        yaxis="y1",
+        x=months_vn, y=R_vals, name="Rainfall",
+        marker_color=bar_colors, yaxis="y1",
         hovertemplate="Mưa: %{y:.0f} mm<extra></extra>",
     ))
-
     fig.add_trace(go.Scatter(
-        x=months_vn, y=T_vals,
-        name="Temperature",
+        x=months_vn, y=T_vals, name="Temperature",
         mode="lines+markers",
         line=dict(color="#e65100", width=2.5),
-        marker=dict(color="#e65100", size=7, symbol="circle"),
+        marker=dict(color="#e65100", size=7),
         yaxis="y2",
         hovertemplate="Nhiệt độ: %{y:.1f}°C<extra></extra>",
     ))
-
-    # Highlight forecast period
-    for m in forecast_months:
-        fig.add_vrect(
-            x0=months_vn[m-1], x1=months_vn[m-1],
-            fillcolor="rgba(0,0,0,0)",
-            annotation_text="", annotation_position="top left",
-        )
-
     fig.update_layout(
         title=dict(
-            text=f"<b>Climate Trend of Past Normal Years (1989–2018)</b>",
+            text="<b>Climate Trend of Past Normal Years (1989–2018)</b>",
             font=dict(size=13, family="Arial"), x=0.5, xanchor="center",
         ),
-        xaxis=dict(
-            tickfont=dict(size=11),
-            showgrid=False,
-        ),
+        xaxis=dict(tickfont=dict(size=11), showgrid=False),
         yaxis=dict(
             title=dict(text="Rainfall (mm)", font=dict(color="#1565c0", size=11)),
             tickfont=dict(color="#1565c0", size=10),
@@ -857,16 +882,11 @@ def build_climate_normal_chart(commune_name, df_r, df_t, forecast_months):
             range=[min(T_vals) - 3, max(T_vals) + 5] if T_vals else [15, 40],
             showgrid=False,
         ),
-        legend=dict(
-            x=0.02, y=-0.15, orientation="h",
-            bgcolor="rgba(255,255,255,0.8)",
-            font=dict(size=11),
-        ),
+        legend=dict(x=0.02, y=-0.15, orientation="h",
+                    bgcolor="rgba(255,255,255,0.8)", font=dict(size=11)),
         height=280,
         margin=dict(l=50, r=60, t=45, b=50),
-        plot_bgcolor="white",
-        paper_bgcolor="white",
-        bargap=0.2,
+        plot_bgcolor="white", paper_bgcolor="white", bargap=0.2,
     )
     return fig
 
@@ -877,36 +897,29 @@ def build_climate_normal_chart(commune_name, df_r, df_t, forecast_months):
 
 def render_xacsuat_table(xacsuat_data, month_labels):
     """
-    Render probability table like Image 2.
+    Render bảng xác suất (giống ảnh mẫu).
     xacsuat_data: {month_label: {"T": (thap, xapxi, caohon), "R": (thap, xapxi, caohon)}}
     """
-    headers = ["Tháng"] + [str(i) for i in range(6, 6 + len(month_labels))]
-    sub_headers = ["Tỷ lệ"] + ["Thấp hơn", "Xấp xỉ", "Cao hơn"] * len(month_labels)
-
     def _fmt(v):
         return str(int(round(v))) if v is not None else "—"
 
-    rows_T = ["Nhiệt độ trung bình nhiều năm (%)"]
-    rows_R = ["Lượng mưa trung bình nhiều năm (mm)"]
-
+    rows_T, rows_R = [], []
     for lbl in month_labels:
-        probs = xacsuat_data.get(lbl, {})
+        probs  = xacsuat_data.get(lbl, {})
         t_vals = probs.get("T", (None, None, None))
         r_vals = probs.get("R", (None, None, None))
         rows_T.extend([_fmt(v) for v in t_vals])
         rows_R.extend([_fmt(v) for v in r_vals])
 
-    # Build HTML table matching Image 2 style
-    n_months = len(month_labels)
     html = """
     <table style="border-collapse:collapse; width:100%; font-size:13px; font-family:Arial;">
       <thead>
         <tr style="background:#1e3a5f; color:white; text-align:center;">
-          <th rowspan="2" style="border:1px solid #aaa; padding:4px 8px; width:140px;">Tháng</th>
+          <th rowspan="2" style="border:1px solid #aaa; padding:4px 8px; width:160px;">Tháng</th>
     """
     for lbl in month_labels:
-        m = lbl.replace("Tháng ","").split("/")[0]
-        html += f'<th colspan="3" style="border:1px solid #aaa; padding:4px 8px;">{m}</th>'
+        m_str = lbl.replace("Tháng ", "").split("/")[0]
+        html += f'<th colspan="3" style="border:1px solid #aaa; padding:4px 8px;">{m_str}</th>'
     html += "</tr><tr style='background:#2d6a4f; color:white; text-align:center;'>"
     for _ in month_labels:
         html += '<th style="border:1px solid #aaa; padding:4px 6px;">Thấp hơn<br><small>(XSHC)</small></th>'
@@ -914,10 +927,15 @@ def render_xacsuat_table(xacsuat_data, month_labels):
         html += '<th style="border:1px solid #aaa; padding:4px 6px;">Cao hơn<br><small>(XSVC)</small></th>'
     html += "</tr></thead><tbody>"
 
-    for row_data, var_label in [(rows_T, "Nhiệt độ TB nhiều năm (%)"),
-                                 (rows_R, "Lượng mưa TB nhiều năm (mm)")]:
-        html += f'<tr><td style="border:1px solid #aaa; padding:4px 8px; background:#e8f4f8; font-weight:bold;">{var_label}</td>'
-        for val in row_data[1:]:
+    for row_data, var_label in [
+        (rows_T, "Nhiệt độ TB nhiều năm (%)"),
+        (rows_R, "Lượng mưa TB nhiều năm (mm)"),
+    ]:
+        html += (
+            f'<tr><td style="border:1px solid #aaa; padding:4px 8px;'
+            f' background:#e8f4f8; font-weight:bold;">{var_label}</td>'
+        )
+        for val in row_data:
             html += f'<td style="border:1px solid #aaa; padding:4px 8px; text-align:center;">{val}</td>'
         html += "</tr>"
 
@@ -930,73 +948,72 @@ def render_xacsuat_table(xacsuat_data, month_labels):
 # ══════════════════════════════════════════════════════════════════════════════
 
 def render_risk_table(crop_name, decades, decade_risks, growth_stages=None, diseases=None):
-    """
-    Render a risk table for a crop/livestock similar to Word template.
-    crop_name: "Lúa", "Rau", "Lợn", "Gà"
-    decades: list of DECADAL_LABELS active in this period
-    decade_risks: {crop: {decade: risk_level}}
-    growth_stages: optional dict {decade: stage_name}
-    diseases: list of (disease_name, {decade: risk_level}) or None (use same risk as climate)
-    """
     risk_for_crop = decade_risks.get(crop_name, {})
     RISK_COLOR = {0: "#f0f0f0", 1: "#c8f7c5", 2: "#fff176", 3: "#ff8a65"}
-    RISK_TEXT  = {0: "—", 1: "Thấp", 2: "TB", 3: "Cao"}
+    RISK_TEXT  = {0: "—",       1: "Thấp",    2: "TB",      3: "Cao"}
 
     def _risk_cell(r):
         c = RISK_COLOR.get(r, "#f0f0f0")
         t = RISK_TEXT.get(r, "—")
-        return f'<td style="border:1px solid #ccc; padding:3px 6px; text-align:center; background:{c}; font-weight:bold; font-size:12px;">{t}</td>'
+        return (
+            f'<td style="border:1px solid #ccc; padding:3px 6px; text-align:center;'
+            f' background:{c}; font-weight:bold; font-size:12px;">{t}</td>'
+        )
 
-    col_w = 70
-    head_style = "border:1px solid #ccc; padding:4px 6px; text-align:center; background:#1e3a5f; color:white; font-size:12px;"
-    row_style = "border:1px solid #ccc; padding:3px 8px; font-size:12px; background:#f8f9fa;"
+    head_style  = "border:1px solid #ccc; padding:4px 6px; text-align:center; background:#1e3a5f; color:white; font-size:12px;"
+    row_style   = "border:1px solid #ccc; padding:3px 8px; font-size:12px; background:#f8f9fa;"
     group_style = "border:1px solid #ccc; padding:3px 8px; font-size:12px; background:#e3f2fd; font-weight:bold;"
 
-    html = f'<table style="border-collapse:collapse; width:100%; margin-bottom:12px;">'
+    html  = '<table style="border-collapse:collapse; width:100%; margin-bottom:12px;">'
     html += '<thead><tr>'
     html += f'<th style="{head_style} width:180px;">Giai đoạn</th>'
     for d in decades:
-        html += f'<th style="{head_style} width:{col_w}px;">{d}</th>'
+        html += f'<th style="{head_style} width:70px;">{d}</th>'
     html += '</tr>'
 
-    # Growth stage row (for crops)
     if growth_stages:
         html += '<tr>'
         html += f'<td style="{group_style}">Chu kỳ sinh trưởng</td>'
         for d in decades:
             stage = growth_stages.get(d, "")
-            html += f'<td style="border:1px solid #ccc; padding:3px 4px; text-align:center; font-size:11px; background:#fff9e6;">{stage}</td>'
+            html += (
+                f'<td style="border:1px solid #ccc; padding:3px 4px;'
+                f' text-align:center; font-size:11px; background:#fff9e6;">{stage}</td>'
+            )
         html += '</tr>'
     html += '</thead><tbody>'
 
-    # Climate risks section
-    html += f'<tr><td colspan="{len(decades)+1}" style="border:1px solid #ccc; padding:3px 8px; background:#c5e1a5; font-weight:bold; font-size:12px;">Rủi ro khí hậu</td></tr>'
+    html += (
+        f'<tr><td colspan="{len(decades)+1}" style="border:1px solid #ccc; padding:3px 8px;'
+        f' background:#c5e1a5; font-weight:bold; font-size:12px;">Rủi ro khí hậu</td></tr>'
+    )
 
     if crop_name in ("Lợn", "Gà"):
         climate_rows = [
             ("Rủi ro nắng nóng / giá lạnh", risk_for_crop),
-            ("Rủi ro mưa lớn", risk_for_crop),
+            ("Rủi ro mưa lớn",               risk_for_crop),
         ]
     else:
         climate_rows = [
-            ("Rủi ro hạn hán", risk_for_crop),
-            ("Rủi ro nắng nóng / giá lạnh", risk_for_crop),
-            ("Rủi ro mưa lớn", risk_for_crop),
+            ("Rủi ro hạn hán",               risk_for_crop),
+            ("Rủi ro nắng nóng / giá lạnh",  risk_for_crop),
+            ("Rủi ro mưa lớn",               risk_for_crop),
         ]
 
     for row_label, row_risk in climate_rows:
-        html += '<tr>'
-        html += f'<td style="{row_style} padding-left:16px;">{row_label}</td>'
+        html += f'<tr><td style="{row_style} padding-left:16px;">{row_label}</td>'
         for d in decades:
             html += _risk_cell(row_risk.get(d, 0))
         html += '</tr>'
 
-    # Disease/pest section
     if diseases:
-        html += f'<tr><td colspan="{len(decades)+1}" style="border:1px solid #ccc; padding:3px 8px; background:#ffe082; font-weight:bold; font-size:12px;">Rủi ro sinh vật hại / dịch bệnh</td></tr>'
+        html += (
+            f'<tr><td colspan="{len(decades)+1}" style="border:1px solid #ccc; padding:3px 8px;'
+            f' background:#ffe082; font-weight:bold; font-size:12px;">'
+            f'Rủi ro sinh vật hại / dịch bệnh</td></tr>'
+        )
         for disease_name, disease_risk in diseases:
-            html += '<tr>'
-            html += f'<td style="{row_style} padding-left:16px;">{disease_name}</td>'
+            html += f'<tr><td style="{row_style} padding-left:16px;">{disease_name}</td>'
             for d in decades:
                 html += _risk_cell(disease_risk.get(d, 0))
             html += '</tr>'
@@ -1015,19 +1032,20 @@ def _idw_knn(xi, yi, zi, query_xy, k=12, power=3.0, eps=1e-12):
     if dists.ndim == 1:
         dists, idxs = dists[:, None], idxs[:, None]
     exact = dists <= eps
-    out = np.empty(dists.shape[0], dtype=float)
+    out   = np.empty(dists.shape[0], dtype=float)
     for r in np.where(exact.any(axis=1))[0]:
         out[r] = zi[idxs[r, np.where(exact[r])[0][0]]]
     rest = ~exact.any(axis=1)
     if np.any(rest):
         d, nn = dists[rest], idxs[rest]
-        w = 1.0 / np.maximum(d, eps) ** power
+        w     = 1.0 / np.maximum(d, eps) ** power
         out[rest] = (w * zi[nn]).sum(axis=1) / w.sum(axis=1)
     return out
 
 
 @st.cache_data(show_spinner=False)
-def _compute_grid(lons_t, lats_t, vals_t, minx, miny, maxx, maxy, mask_wkt, GRID_N=400, SIGMA=1.0):
+def _compute_grid(lons_t, lats_t, vals_t, minx, miny, maxx, maxy, mask_wkt,
+                  GRID_N=400, SIGMA=1.0):
     xi, yi, zi = np.array(lons_t), np.array(lats_t), np.array(vals_t)
     gx_vec = np.linspace(minx, maxx, GRID_N)
     gy_vec = np.linspace(miny, maxy, GRID_N)
@@ -1042,7 +1060,7 @@ def _compute_grid(lons_t, lats_t, vals_t, minx, miny, maxx, maxy, mask_wkt, GRID
             from shapely.vectorized import contains as shp_contains
             mask_flat = shp_contains(mask_shape, gx.ravel(), gy.ravel()).reshape(gx.shape)
         except (ImportError, AttributeError):
-            prep_s = prep(mask_shape)
+            prep_s    = prep(mask_shape)
             mask_flat = np.array(
                 [prep_s.contains(Point(float(px), float(py))) for px, py in grid_xy],
                 dtype=bool).reshape(gx.shape)
@@ -1054,7 +1072,7 @@ def _compute_grid(lons_t, lats_t, vals_t, minx, miny, maxx, maxy, mask_wkt, GRID
 def _mpl_to_plotly(cmap_name, n=128):
     import matplotlib.pyplot as plt
     cmap = plt.get_cmap(cmap_name)
-    pos = np.linspace(0, 1, n)
+    pos  = np.linspace(0, 1, n)
     return [[p, f"rgb({int(r*255)},{int(g*255)},{int(b*255)})"]
             for p, (r, g, b, _) in zip(pos, [cmap(v) for v in pos])]
 
@@ -1087,11 +1105,11 @@ def build_figure(lons, lats, vals, meta, title, boundary_data, show_xa):
         float(minx), float(miny), float(maxx), float(maxy), mask_wkt,
     )
 
-    levels = sorted(meta.get("levels", list(range(-5, 6))))
+    levels   = sorted(meta.get("levels", list(range(-5, 6))))
     vmin, vmax = levels[0], levels[-1]
     gv_display = np.where(np.isnan(gv_masked), np.nan, np.clip(gv_masked, vmin, vmax))
     colorscale = _mpl_to_plotly(meta.get("cmap", "RdBu_r"))
-    unit = meta.get("unit", "")
+    unit       = meta.get("unit", "")
 
     fig = go.Figure()
 
@@ -1107,10 +1125,11 @@ def build_figure(lons, lats, vals, meta, title, boundary_data, show_xa):
         colorscale=colorscale, zmin=vmin, zmax=vmax,
         autocontour=False,
         contours=dict(start=vmin, end=vmax,
-                      size=float(np.min(np.diff(levels))) if len(levels)>1 else 1.0,
+                      size=float(np.min(np.diff(levels))) if len(levels) > 1 else 1.0,
                       coloring="fill", showlines=False),
         colorbar=dict(
-            title=dict(text=f"Chuẩn sai ({unit})", side="right", font=dict(size=12, family="Arial, sans-serif")),
+            title=dict(text=f"Chuẩn sai ({unit})", side="right",
+                       font=dict(size=12, family="Arial, sans-serif")),
             tickvals=levels, ticktext=[str(v) for v in levels],
             tickfont=dict(size=10), thickness=16, len=0.75,
             outlinewidth=1, outlinecolor="#aaa"),
@@ -1145,7 +1164,8 @@ def build_figure(lons, lats, vals, meta, title, boundary_data, show_xa):
         ))
 
     fig.update_layout(
-        title=dict(text=title, font=dict(size=14, family="Arial, sans-serif"), x=0.5, xanchor="center"),
+        title=dict(text=title, font=dict(size=14, family="Arial, sans-serif"),
+                   x=0.5, xanchor="center"),
         xaxis=dict(title="Kinh độ (°E)", range=[plot_minx, plot_maxx],
                    fixedrange=True, tickformat=".2f",
                    scaleanchor="y", scaleratio=1, constrain="domain",
@@ -1159,8 +1179,8 @@ def build_figure(lons, lats, vals, meta, title, boundary_data, show_xa):
         plot_bgcolor="white", paper_bgcolor="white",
         hovermode="closest", dragmode=False,
         modebar_remove=["zoom","pan","zoomIn2d","zoomOut2d","resetScale2d",
-                         "lasso2d","select2d","autoScale2d",
-                         "hoverClosestCartesian","hoverCompareCartesian","toggleSpikelines"],
+                        "lasso2d","select2d","autoScale2d",
+                        "hoverClosestCartesian","hoverCompareCartesian","toggleSpikelines"],
     )
     return fig, None
 
@@ -1169,11 +1189,13 @@ def build_figure(lons, lats, vals, meta, title, boundary_data, show_xa):
 # RENDER PANELS (Dự báo khí hậu mùa)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def render_var_panel(var_prefix, meta, period, month_idx, boundary_data, month_labels, state_key, show_xa):
+def render_var_panel(var_prefix, meta, period, month_idx, boundary_data,
+                     month_labels, state_key, show_xa):
     with st.spinner(f"⏳ Đang tải {meta['label']} …"):
         nc_bytes = download_nc(period, var_prefix)
     if nc_bytes is None:
-        st.session_state[state_key] = {"error": f"Không tải được file NC: {var_prefix}.{period}.nc"}
+        st.session_state[state_key] = {
+            "error": f"Không tải được file NC: {var_prefix}.{period}.nc"}
         return
 
     with st.spinner("🔄 Đang đọc dữ liệu …"):
@@ -1183,7 +1205,7 @@ def render_var_panel(var_prefix, meta, period, month_idx, boundary_data, month_l
         return
 
     month_str = month_labels[month_idx] if month_idx < len(month_labels) else f"Tháng +{month_idx+1}"
-    title = f"Chuẩn sai {meta['label']} – {month_str} (Kỳ {period[:4]}/{period[4:]})"
+    title     = f"Chuẩn sai {meta['label']} – {month_str} (Kỳ {period[:4]}/{period[4:]})"
 
     with st.spinner("🗺️ Đang nội suy và vẽ bản đồ …"):
         fig, err2 = build_figure(lons, lats, vals, meta, title, boundary_data, show_xa)
@@ -1192,9 +1214,9 @@ def render_var_panel(var_prefix, meta, period, month_idx, boundary_data, month_l
         return
 
     st.session_state[state_key] = {
-        "fig": fig,
+        "fig":      fig,
         "filename": f"chuan_sai_{var_prefix.replace('.','_')}_{period}_t{month_idx+1}.png",
-        "error": None,
+        "error":    None,
     }
 
 
@@ -1210,8 +1232,8 @@ def display_panel(state_key):
         config={
             "scrollZoom": False, "displayModeBar": True,
             "modeBarButtonsToRemove": ["zoom2d","pan2d","zoomIn2d","zoomOut2d",
-                                        "autoScale2d","resetScale2d","lasso2d","select2d"],
-            "toImageButtonOptions": {"format": "png", "filename": result["filename"], "scale": 2},
+                                       "autoScale2d","resetScale2d","lasso2d","select2d"],
+            "toImageButtonOptions": {"format":"png","filename":result["filename"],"scale":2},
         },
     )
     st.caption("💡 Hover vào bản đồ để xem giá trị. Bấm legend để ẩn/hiện lớp xã.")
@@ -1236,11 +1258,8 @@ def _map_fragment(tab_key, var_dict, period, month_idx, boundary_data, month_lab
 # ══════════════════════════════════════════════════════════════════════════════
 
 def render_commune_bulletin(commune_name, crops, period, month_labels,
-                             df_r, df_t, df_decadal, xacsuat_data,
-                             gdf_xa=None):
-    """
-    Render a full bulletin for one commune.
-    """
+                             df_r, df_t, commune_coords,
+                             df_decadal, xacsuat_data, gdf_xa=None):
     yr, mo = int(period[:4]), int(period[4:])
     forecast_months = []
     for offset in range(1, 4):
@@ -1248,39 +1267,38 @@ def render_commune_bulletin(commune_name, crops, period, month_labels,
         m2 = ((m2 - 1) % 12) + 1
         forecast_months.append(m2)
 
-    # Decade labels for this forecast window
     active_decades = []
     for offset in range(1, 4):
         m2 = mo + offset
-        y2 = yr + (m2 - 1) // 12
         m2 = ((m2 - 1) % 12) + 1
         for d in ["T1", "T2", "T3"]:
             active_decades.append(f"{d}/{m2}")
 
-    # Compute risks
-    decade_risks = compute_decade_risks(df_decadal)
+    decade_risks      = compute_decade_risks(df_decadal)
     growth_stages_lua = {d: LUA_GROWTH_STAGES.get(d, "") for d in active_decades}
     growth_stages_rau = {d: RAU_GROWTH_STAGES.get(d, "") for d in active_decades}
 
-    # ─── Header ───
     start_m = month_labels[0].replace("Tháng ", "")
     end_m   = month_labels[-1].replace("Tháng ", "")
     st.markdown(
-        f'<div class="commune-title">📋 Bản tin cảnh báo khí hậu tháng {start_m} đến {end_m} – Xã {commune_name}</div>',
-        unsafe_allow_html=True
+        f'<div class="commune-title">'
+        f'📋 Bản tin cảnh báo khí hậu tháng {start_m} đến {end_m} – Xã {commune_name}'
+        f'</div>',
+        unsafe_allow_html=True,
     )
 
-    # ─── Two-column layout: map + TBNN chart ───
     col_map, col_chart = st.columns([1, 2])
 
     with col_map:
         st.markdown("**📍 Vị trí xã**")
         if gdf_xa is not None:
-            # Find the commune geometry
             commune_gdf = None
             for col in gdf_xa.columns:
                 if col.upper() in ("TEN_XA", "TENXA", "XA", "NAME", "TEN"):
-                    matches = gdf_xa[gdf_xa[col].str.contains(commune_name.split()[0], case=False, na=False)]
+                    matches = gdf_xa[
+                        gdf_xa[col].str.contains(
+                            commune_name.split()[0], case=False, na=False)
+                    ]
                     if not matches.empty:
                         commune_gdf = matches
                     break
@@ -1288,7 +1306,6 @@ def render_commune_bulletin(commune_name, crops, period, month_labels,
             if commune_gdf is not None and not commune_gdf.empty:
                 try:
                     centroid = commune_gdf.geometry.centroid.iloc[0]
-                    # Build simple Plotly map for commune
                     xs, ys = [], []
                     for geom in commune_gdf.geometry:
                         if geom is None: continue
@@ -1299,7 +1316,6 @@ def render_commune_bulletin(commune_name, crops, period, month_labels,
                             ys.extend(list(_y)); ys.append(None)
 
                     fig_map = go.Figure()
-                    # All communes outline
                     all_x, all_y = [], []
                     for geom in gdf_xa.geometry:
                         if geom is None: continue
@@ -1308,21 +1324,25 @@ def render_commune_bulletin(commune_name, crops, period, month_labels,
                             _x, _y = poly.exterior.xy
                             all_x.extend(list(_x)); all_x.append(None)
                             all_y.extend(list(_y)); all_y.append(None)
-                    fig_map.add_trace(go.Scatter(x=all_x, y=all_y, mode="lines",
-                                                  line=dict(color="#cccccc", width=0.8),
-                                                  hoverinfo="skip", showlegend=False))
-                    # Highlighted commune
-                    fig_map.add_trace(go.Scatter(x=xs, y=ys, mode="lines",
-                                                  fill="toself", fillcolor="rgba(30,58,95,0.35)",
-                                                  line=dict(color="#1e3a5f", width=2),
-                                                  hoverinfo="skip", showlegend=False))
-                    fig_map.add_trace(go.Scatter(x=[centroid.x], y=[centroid.y],
-                                                  mode="text+markers",
-                                                  text=[commune_name],
-                                                  textposition="top center",
-                                                  textfont=dict(size=11, color="#1e3a5f", family="Arial"),
-                                                  marker=dict(size=8, color="#e53935"),
-                                                  hoverinfo="skip", showlegend=False))
+                    fig_map.add_trace(go.Scatter(
+                        x=all_x, y=all_y, mode="lines",
+                        line=dict(color="#cccccc", width=0.8),
+                        hoverinfo="skip", showlegend=False,
+                    ))
+                    fig_map.add_trace(go.Scatter(
+                        x=xs, y=ys, mode="lines",
+                        fill="toself", fillcolor="rgba(30,58,95,0.35)",
+                        line=dict(color="#1e3a5f", width=2),
+                        hoverinfo="skip", showlegend=False,
+                    ))
+                    fig_map.add_trace(go.Scatter(
+                        x=[centroid.x], y=[centroid.y],
+                        mode="text+markers", text=[commune_name],
+                        textposition="top center",
+                        textfont=dict(size=11, color="#1e3a5f", family="Arial"),
+                        marker=dict(size=8, color="#e53935"),
+                        hoverinfo="skip", showlegend=False,
+                    ))
                     fig_map.update_layout(
                         height=220, margin=dict(l=10, r=10, t=10, b=10),
                         xaxis=dict(showgrid=False, zeroline=False, showticklabels=False,
@@ -1347,86 +1367,91 @@ def render_commune_bulletin(commune_name, crops, period, month_labels,
         else:
             st.info("⚠️ Chưa tải được dữ liệu TBNN cho xã này.")
 
-    # ─── Probability forecast table ───
+    # ─── Probability forecast table ───────────────────────────────────────────
     st.markdown("**📊 Dự báo khí hậu xác suất**")
-    if xacsuat_data and any(xacsuat_data.values()):
+    has_real_data = (
+        xacsuat_data
+        and any(
+            any(v is not None for v in probs.get("T", (None,)))
+            or any(v is not None for v in probs.get("R", (None,)))
+            for probs in xacsuat_data.values()
+        )
+    )
+
+    if has_real_data:
         html_table = render_xacsuat_table(xacsuat_data, month_labels)
         st.markdown(html_table, unsafe_allow_html=True)
     else:
-        # Fallback: display placeholder table structure
-        tbl_data = {
-            "Biến": ["Nhiệt độ TB nhiều năm (%)", "Lượng mưa TB nhiều năm (mm)"],
-        }
-        for lbl in month_labels:
-            m = lbl.replace("Tháng ","").split("/")[0]
-            tbl_data[f"Tháng {m} – Thấp hơn (XSHC)"] = ["—", "—"]
-            tbl_data[f"Tháng {m} – Xấp xỉ (XSCC)"] = ["—", "—"]
-            tbl_data[f"Tháng {m} – Cao hơn (XSVC)"] = ["—", "—"]
-        st.info("ℹ️ Dữ liệu xác suất chưa có hoặc chưa tải được – bảng hiển thị giá trị chờ.")
-        st.dataframe(pd.DataFrame(tbl_data), use_container_width=True, hide_index=True)
+        html_table = render_xacsuat_table(
+            {lbl: {"T": (None, None, None), "R": (None, None, None)} for lbl in month_labels},
+            month_labels,
+        )
+        st.markdown(html_table, unsafe_allow_html=True)
+        st.caption("ℹ️ Dữ liệu xác suất chưa có hoặc chưa tải được – bảng sẽ tự cập nhật khi server có dữ liệu mới.")
 
     st.markdown("---")
 
-    # ─── Risk tables per crop ───
+    # ─── Risk tables per crop ─────────────────────────────────────────────────
     for crop in crops:
         emoji = {"Lúa": "🌾", "Rau": "🥬", "Lợn": "🐷", "Gà": "🐔"}.get(crop, "🌿")
+        end_yr = yr if mo + 3 <= 12 else yr + 1
         st.markdown(
-            f'<div class="risk-header">{emoji} Mức độ rủi ro đối với {crop} '
-            f'giai đoạn {start_m} đến {end_m} năm {yr if mo + 3 <= 12 else yr+1}</div>',
-            unsafe_allow_html=True
+            f'<div class="risk-header">'
+            f'{emoji} Mức độ rủi ro đối với {crop} '
+            f'giai đoạn {start_m} đến {end_m} năm {end_yr}'
+            f'</div>',
+            unsafe_allow_html=True,
         )
 
         if crop == "Lúa":
             gs = growth_stages_lua
             diseases = [
-                ("Rầy", {d: min(3, decade_risks.get("Lúa", {}).get(d, 1)+0) for d in active_decades}),
-                ("Sâu cuốn lá", {d: min(3, max(1, 2 if df_decadal is not None and not df_decadal.empty else 1)) for d in active_decades}),
-                ("Đục thân", {d: 1 for d in active_decades}),
-                ("Đạo ôn", {d: min(3, decade_risks.get("Lúa", {}).get(d, 1)) for d in active_decades}),
-                ("Nấm cổ bông", {d: 1 for d in active_decades}),
-                ("Khô vằn", {d: 1 for d in active_decades}),
-                ("Rầy nâu", {d: min(3, decade_risks.get("Lúa", {}).get(d, 1)) for d in active_decades}),
+                ("Rầy",            {d: min(3, decade_risks.get("Lúa", {}).get(d, 1)) for d in active_decades}),
+                ("Sâu cuốn lá",    {d: min(3, max(1, 2)) for d in active_decades}),
+                ("Đục thân",       {d: 1 for d in active_decades}),
+                ("Đạo ôn",         {d: min(3, decade_risks.get("Lúa", {}).get(d, 1)) for d in active_decades}),
+                ("Nấm cổ bông",    {d: 1 for d in active_decades}),
+                ("Khô vằn",        {d: 1 for d in active_decades}),
+                ("Rầy nâu",        {d: min(3, decade_risks.get("Lúa", {}).get(d, 1)) for d in active_decades}),
             ]
         elif crop == "Rau":
             gs = growth_stages_rau
             diseases = [
-                ("Sâu xanh", {d: 1 for d in active_decades}),
-                ("Sâu tơ", {d: 1 for d in active_decades}),
-                ("Rệp", {d: 1 for d in active_decades}),
-                ("Bọ nhảy", {d: 1 for d in active_decades}),
-                ("Bệnh thối gốc", {d: min(3, decade_risks.get("Rau", {}).get(d, 1)) for d in active_decades}),
-                ("Sương mai", {d: min(3, decade_risks.get("Rau", {}).get(d, 1)) for d in active_decades}),
+                ("Sâu xanh",       {d: 1 for d in active_decades}),
+                ("Sâu tơ",         {d: 1 for d in active_decades}),
+                ("Rệp",            {d: 1 for d in active_decades}),
+                ("Bọ nhảy",        {d: 1 for d in active_decades}),
+                ("Bệnh thối gốc",  {d: min(3, decade_risks.get("Rau", {}).get(d, 1)) for d in active_decades}),
+                ("Sương mai",      {d: min(3, decade_risks.get("Rau", {}).get(d, 1)) for d in active_decades}),
             ]
         elif crop == "Lợn":
             gs = None
             diseases = [
-                ("Dịch tả lợn Châu Phi", {d: 1 for d in active_decades}),
-                ("Dịch tả lợn cổ điển", {d: 1 for d in active_decades}),
-                ("Viêm phổi dính sườn", {d: 1 for d in active_decades}),
-                ("Suyễn lợn", {d: 1 for d in active_decades}),
-                ("Tai xanh (PRRS)", {d: 1 for d in active_decades}),
-                ("Tiêu chảy do E. coli", {d: min(3, decade_risks.get("Lợn", {}).get(d, 1)) for d in active_decades}),
-                ("Đóng dấu lợn", {d: min(3, decade_risks.get("Lợn", {}).get(d, 1)) for d in active_decades}),
-                ("Lở mồm long móng", {d: 1 for d in active_decades}),
-                ("Tụ huyết trùng lợn", {d: min(3, decade_risks.get("Lợn", {}).get(d, 1)) for d in active_decades}),
+                ("Dịch tả lợn Châu Phi",   {d: 1 for d in active_decades}),
+                ("Dịch tả lợn cổ điển",    {d: 1 for d in active_decades}),
+                ("Viêm phổi dính sườn",    {d: 1 for d in active_decades}),
+                ("Suyễn lợn",              {d: 1 for d in active_decades}),
+                ("Tai xanh (PRRS)",        {d: 1 for d in active_decades}),
+                ("Tiêu chảy do E. coli",   {d: min(3, decade_risks.get("Lợn", {}).get(d, 1)) for d in active_decades}),
+                ("Đóng dấu lợn",           {d: min(3, decade_risks.get("Lợn", {}).get(d, 1)) for d in active_decades}),
+                ("Lở mồm long móng",       {d: 1 for d in active_decades}),
+                ("Tụ huyết trùng lợn",     {d: min(3, decade_risks.get("Lợn", {}).get(d, 1)) for d in active_decades}),
             ]
         else:  # Gà
             gs = None
             diseases = [
-                ("Hen gà", {d: 1 for d in active_decades}),
-                ("Cúm gia cầm độc lực cao", {d: 1 for d in active_decades}),
-                ("Cầu trùng gà", {d: min(3, decade_risks.get("Gà", {}).get(d, 1)) for d in active_decades}),
-                ("Viêm ruột hoại tử", {d: 1 for d in active_decades}),
-                ("Newcastle", {d: 1 for d in active_decades}),
-                ("Tụ huyết trùng gia cầm", {d: min(3, decade_risks.get("Gà", {}).get(d, 1)) for d in active_decades}),
-                ("Ký sinh trùng đường máu", {d: min(3, decade_risks.get("Gà", {}).get(d, 1)) for d in active_decades}),
-                ("Đậu gà", {d: min(3, decade_risks.get("Gà", {}).get(d, 1)) for d in active_decades}),
+                ("Hen gà",                         {d: 1 for d in active_decades}),
+                ("Cúm gia cầm độc lực cao",        {d: 1 for d in active_decades}),
+                ("Cầu trùng gà",                   {d: min(3, decade_risks.get("Gà", {}).get(d, 1)) for d in active_decades}),
+                ("Viêm ruột hoại tử",              {d: 1 for d in active_decades}),
+                ("Newcastle",                       {d: 1 for d in active_decades}),
+                ("Tụ huyết trùng gia cầm",         {d: min(3, decade_risks.get("Gà", {}).get(d, 1)) for d in active_decades}),
+                ("Ký sinh trùng đường máu",        {d: min(3, decade_risks.get("Gà", {}).get(d, 1)) for d in active_decades}),
+                ("Đậu gà",                         {d: min(3, decade_risks.get("Gà", {}).get(d, 1)) for d in active_decades}),
             ]
 
         html_risk = render_risk_table(crop, active_decades, decade_risks, gs, diseases)
         st.markdown(html_risk, unsafe_allow_html=True)
-
-        # Legend
         st.markdown(
             '<div style="font-size:11px; margin:-6px 0 10px 0;">'
             '<span style="background:#c8f7c5; padding:2px 8px; margin-right:6px; border-radius:3px;">■ Thấp</span>'
@@ -1434,7 +1459,7 @@ def render_commune_bulletin(commune_name, crops, period, month_labels,
             '<span style="background:#ff8a65; padding:2px 8px; margin-right:6px; border-radius:3px;">■ Cao</span>'
             '<span style="background:#f0f0f0; padding:2px 8px; border-radius:3px;">■ Không áp dụng</span>'
             '</div>',
-            unsafe_allow_html=True
+            unsafe_allow_html=True,
         )
 
 
@@ -1449,18 +1474,18 @@ def page_tong_quan():
         "bao gồm đánh giá rủi ro cho **Lúa, Rau, Lợn, Gà** theo từng kỳ tháng."
     )
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("🏘️ Số xã", str(len(COMMUNE_CROPS)))
+    c1.metric("🏘️ Số xã",            str(len(COMMUNE_CROPS)))
     c2.metric("🌱 Đối tượng nông nghiệp", "4")
-    c3.metric("📅 Kỳ dự báo", "3 tháng")
-    c4.metric("📄 Bản tin đã tạo", "0")
+    c3.metric("📅 Kỳ dự báo",         "3 tháng")
+    c4.metric("📄 Bản tin đã tạo",    "0")
 
 
 def page_du_bao():
-    st.markdown('<div class="module-header">🔄 Dự báo khí hậu mùa</div>', unsafe_allow_html=True)
+    st.markdown('<div class="module-header">🔄 Dự báo khí hậu mùa</div>',
+                unsafe_allow_html=True)
 
     with st.spinner("⏳ Đang tải shapefile …"):
         gdf_all_tinh, gdf_tinh_qn, gdf_xa = load_shapefiles()
-
     if gdf_all_tinh is None and gdf_xa is None:
         st.warning("⚠️ Không tải được shapefile – bản đồ sẽ không có ranh giới.")
 
@@ -1473,13 +1498,11 @@ def page_du_bao():
         return
 
     periods_desc = list(reversed(periods))
-    yr_mo_labels = [f"{p[:4]}/{p[4:]}" for p in periods_desc]
-
     col1, col2, col3 = st.columns([2, 2, 2])
     with col1:
         sel_idx = st.selectbox(
             "📅 Kỳ dự báo:", range(len(periods_desc)),
-            format_func=lambda i: yr_mo_labels[i],
+            format_func=lambda i: f"{periods_desc[i][:4]}/{periods_desc[i][4:]}",
             help="Tự động cập nhật khi server có thư mục mới",
         )
         sel_period = periods_desc[sel_idx]
@@ -1502,7 +1525,6 @@ def page_du_bao():
 
     st.markdown("---")
     tab_c, tab_e = st.tabs(["🌡️ Chuẩn sai dự báo khí hậu", "⚠️ Chuẩn sai dự báo cực đoan"])
-
     with tab_c:
         _map_fragment("c", CLIMATE_VARS, sel_period, month_idx, boundary_data, month_labels, show_xa)
     with tab_e:
@@ -1513,11 +1535,8 @@ def page_ban_tin_xa():
     st.markdown('<div class="module-header">📋 Bản tin cảnh báo rủi ro khí hậu</div>',
                 unsafe_allow_html=True)
 
-    # ── Sidebar controls ──
     col1, col2 = st.columns([2, 3])
-
     with col1:
-        # Period selection
         with st.spinner("🔍 Kiểm tra dữ liệu …"):
             periods = fetch_available_periods()
         if not periods:
@@ -1530,11 +1549,9 @@ def page_ban_tin_xa():
             range(len(periods_desc)),
             format_func=lambda i: f"{periods_desc[i][:4]}/{periods_desc[i][4:]}",
         )
-        sel_period = periods_desc[sel_idx]
-
-        # Commune selection
+        sel_period   = periods_desc[sel_idx]
         commune_list = list(COMMUNE_CROPS.keys())
-        sel_commune = st.selectbox("🏘️ Chọn xã:", commune_list)
+        sel_commune  = st.selectbox("🏘️ Chọn xã:", commune_list)
 
     yr, mo = int(sel_period[:4]), int(sel_period[4:])
     month_labels = []
@@ -1551,33 +1568,43 @@ def page_ban_tin_xa():
 
     st.markdown("---")
 
-    # ── Load data ──
     crops = COMMUNE_CROPS.get(sel_commune, [])
 
+    # ── Load ERA5 (kèm tọa độ xã) ──────────────────────────────────────────
     with st.spinner("📥 Đang tải dữ liệu ERA5 TBNN …"):
-        df_r, df_t = load_era5_data()
+        df_r, df_t, commune_coords = load_era5_data()
 
+    # Lấy tọa độ xã từ commune_coords
+    col_key = COMMUNE_COL_MAP.get(sel_commune, "")
+    coord   = commune_coords.get(col_key.lower()) if commune_coords else None
+    lon_c, lat_c = (coord[0], coord[1]) if coord else (None, None)
+
+    # ── Load member decadal ─────────────────────────────────────────────────
     with st.spinner("📥 Đang tải dự báo theo thập …"):
         df_decadal = load_member_decadal(sel_period)
 
+    # ── Load xác suất (6 file riêng biệt) ──────────────────────────────────
     with st.spinner("📥 Đang tải dự báo xác suất …"):
-        xacsuat_data = load_xacsuat_for_commune(sel_period, sel_commune)
+        xacsuat_data = load_xacsuat_for_commune(
+            sel_period, sel_commune, lon_c, lat_c
+        )
 
-    # Load shapefile for commune map
+    # ── Load shapefile ──────────────────────────────────────────────────────
     with st.spinner("⏳ Đang tải shapefile …"):
         _, _, gdf_xa = load_shapefiles()
 
-    # ── Render bulletin ──
+    # ── Render bulletin ─────────────────────────────────────────────────────
     render_commune_bulletin(
-        commune_name=sel_commune,
-        crops=crops,
-        period=sel_period,
-        month_labels=month_labels,
-        df_r=df_r,
-        df_t=df_t,
-        df_decadal=df_decadal,
-        xacsuat_data=xacsuat_data,
-        gdf_xa=gdf_xa,
+        commune_name   = sel_commune,
+        crops          = crops,
+        period         = sel_period,
+        month_labels   = month_labels,
+        df_r           = df_r,
+        df_t           = df_t,
+        commune_coords = commune_coords,
+        df_decadal     = df_decadal,
+        xacsuat_data   = xacsuat_data,
+        gdf_xa         = gdf_xa,
     )
 
 
@@ -1615,7 +1642,7 @@ with st.sidebar:
     st.markdown("Phòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu")
     st.markdown("Viện Khoa học Khí tượng Thủy văn Môi trường và Biển")
     st.markdown("---")
-    st.markdown("*Phiên bản 1.3.0 – 06/2026*")
+    st.markdown("*Phiên bản 1.3.1 – 06/2026*")
 
 if   menu == "🏠 Tổng quan":                          page_tong_quan()
 elif menu == "🔄 Dự báo khí hậu mùa":                page_du_bao()
