@@ -3,7 +3,8 @@
 Ứng dụng Streamlit - Hệ thống Bản tin Khí hậu Nông nghiệp Quảng Ninh
 THAY ĐỔI v1.3.1 – MODULE BẢN TIN CẢNH BÁO RỦI RO KHÍ HẬU:
   [NEW] Tích hợp module xuất Bản tin định dạng PDF khổ giấy A4
-  [PERF] Giữ nguyên toàn bộ cấu trúc và tối ưu của v1.3.0
+  [PERF] Đưa nút tải PDF lên đầu trang, ngang hàng "Đối tượng"
+  [FIX] Sửa lỗi đường dẫn wkhtmltopdf tương thích chạy Local & Cloud
 """
 
 import streamlit as st
@@ -23,6 +24,8 @@ import os
 import re
 import tempfile
 import warnings
+import platform
+import base64
 from datetime import datetime
 
 warnings.filterwarnings("ignore")
@@ -1215,7 +1218,7 @@ def _map_fragment(tab_key, var_dict, period, month_idx, boundary_data, month_lab
 
 def render_commune_bulletin(commune_name, crops, period, month_labels,
                              df_r, df_t, df_decadal, xacsuat_data,
-                             gdf_xa=None):
+                             gdf_xa=None, pdf_placeholder=None):
     yr, mo = int(period[:4]), int(period[4:])
     forecast_months = []
     for offset in range(1, 4):
@@ -1328,17 +1331,14 @@ def render_commune_bulletin(commune_name, crops, period, month_labels,
 
     st.markdown("---")
 
-    # Mảng để lưu trữ mã HTML của tất cả rủi ro phục vụ xuất PDF
     html_risks_list = []
 
     for crop in crops:
         emoji = {"Lúa": "🌾", "Rau": "🥬", "Lợn": "🐷", "Gà": "🐔"}.get(crop, "🌿")
         
-        # Tiêu đề UI
         ui_title = f'<div class="risk-header">{emoji} Mức độ rủi ro đối với {crop} giai đoạn {start_m} đến {end_m} năm {yr if mo + 3 <= 12 else yr+1}</div>'
         st.markdown(ui_title, unsafe_allow_html=True)
         
-        # Tiêu đề PDF
         pdf_title = f'<h4 style="background-color: #c0392b; color: white; padding: 6px; margin-bottom: 5px;">{emoji} Mức độ rủi ro đối với {crop} giai đoạn {start_m} đến {end_m} năm {yr if mo + 3 <= 12 else yr+1}</h4>'
 
         if crop == "Lúa":
@@ -1392,7 +1392,6 @@ def render_commune_bulletin(commune_name, crops, period, month_labels,
         st.markdown(html_risk, unsafe_allow_html=True)
         html_risks_list.append(pdf_title + html_risk)
 
-    # Legend
     st.markdown(
         '<div style="font-size:11px; margin:-6px 0 10px 0;">'
         '<span style="background:#c8f7c5; padding:2px 8px; margin-right:6px; border-radius:3px;">■ Thấp</span>'
@@ -1404,97 +1403,105 @@ def render_commune_bulletin(commune_name, crops, period, month_labels,
     )
 
     # ══════════════════════════════════════════════════════════════════════════════
-    # MODULE EXPORT PDF
+    # MODULE EXPORT PDF (Bắn UI ngược lên Placeholder ở đầu trang)
     # ══════════════════════════════════════════════════════════════════════════════
-    st.markdown("---")
-    st.markdown("### 📥 Tải xuống Bản tin PDF (A4)")
-    st.caption("💡 Quá trình kết xuất PDF có thể mất vài giây. Yêu cầu server cài đặt các thư viện `pdfkit`, `kaleido` và công cụ `wkhtmltopdf`.")
+    if pdf_placeholder is not None:
+        with pdf_placeholder:
+            # Căn chỉnh để nút Download song song và nằm ngay ngắn với "Đối tượng"
+            st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
+            export_key = f"pdf_bytes_{commune_name}_{period}"
+            
+            if export_key in st.session_state:
+                st.download_button(
+                    label="⬇️ Tải file PDF (Đã tạo)",
+                    data=st.session_state[export_key],
+                    file_name=f"Bantin_KhiHauNN_Xa_{commune_name.replace(' ', '_')}_{yr}{mo:02d}.pdf",
+                    mime="application/pdf",
+                    type="primary",
+                    use_container_width=True
+                )
+            else:
+                if st.button("📄 Tạo file PDF (A4)", key=f"btn_export_{commune_name}", use_container_width=True):
+                    with st.spinner("Đang kết xuất bản tin..."):
+                        try:
+                            import pdfkit
+                            
+                            # Cấu hình wkhtmltopdf tự động (cho cả Local Windows và Cloud Linux)
+                            if platform.system() == "Windows":
+                                path_wkhtmltopdf = r'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe'
+                            else:
+                                path_wkhtmltopdf = '/usr/bin/wkhtmltopdf'
 
-    export_key = f"pdf_bytes_{commune_name}_{period}"
-    
-    if st.button("📄 Khởi tạo file PDF", key=f"btn_export_{commune_name}", type="primary"):
-        with st.spinner("Đang kết xuất bản tin sang định dạng A4..."):
-            try:
-                import pdfkit
-                import base64
+                            if os.path.exists(path_wkhtmltopdf):
+                                config = pdfkit.configuration(wkhtmltopdf=path_wkhtmltopdf)
+                            else:
+                                config = pdfkit.configuration()
 
-                # 1. Chuyển đổi biểu đồ Plotly sang Base64
-                img_tag = ""
-                if fig_clim:
-                    try:
-                        img_bytes = fig_clim.to_image(format="png", width=900, height=350, scale=2)
-                        img_b64 = base64.b64encode(img_bytes).decode('utf-8')
-                        img_tag = f'<div style="text-align: center;"><img src="data:image/png;base64,{img_b64}" style="max-width:100%; border:1px solid #ccc;" /></div>'
-                    except Exception as e:
-                        img_tag = f"<p><i>(Không thể chèn biểu đồ. Lỗi: {e}. Vui lòng cài thư viện kaleido: pip install kaleido)</i></p>"
+                            img_tag = ""
+                            if fig_clim:
+                                try:
+                                    img_bytes = fig_clim.to_image(format="png", width=900, height=350, scale=2)
+                                    img_b64 = base64.b64encode(img_bytes).decode('utf-8')
+                                    img_tag = f'<div style="text-align: center;"><img src="data:image/png;base64,{img_b64}" style="max-width:100%; border:1px solid #ccc;" /></div>'
+                                except Exception as e:
+                                    img_tag = f"<p><i>(Lỗi chèn biểu đồ: {e}. Yêu cầu: pip install kaleido)</i></p>"
 
-                # 2. Xây dựng Template HTML chuẩn A4
-                full_html = f"""
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <meta charset="utf-8">
-                    <style>
-                        body {{ font-family: Arial, sans-serif; font-size: 13px; color: #333; line-height: 1.5; }}
-                        h2 {{ text-align: center; color: #1e3a5f; margin-bottom: 5px; text-transform: uppercase; }}
-                        .subtitle {{ text-align: center; font-weight: bold; margin-bottom: 25px; font-size: 14px; }}
-                        h3 {{ color: #2d6a4f; border-bottom: 2px solid #2d6a4f; padding-bottom: 4px; margin-top: 25px; }}
-                        table {{ width: 100%; border-collapse: collapse; margin-bottom: 15px; page-break-inside: avoid; }}
-                        th, td {{ border: 1px solid #999; padding: 6px; text-align: center; }}
-                        th {{ background-color: #f2f2f2; }}
-                        .page-break {{ page-break-before: always; }}
-                    </style>
-                </head>
-                <body>
-                    <h2>BẢN TIN CẢNH BÁO RỦI RO KHÍ HẬU NÔNG NGHIỆP<br>XÃ {commune_name.upper()}</h2>
-                    <div class="subtitle">Kỳ dự báo: Tháng {start_m} đến {end_m} năm {yr if mo + 3 <= 12 else yr+1}</div>
+                            full_html = f"""
+                            <!DOCTYPE html>
+                            <html>
+                            <head>
+                                <meta charset="utf-8">
+                                <style>
+                                    body {{ font-family: Arial, sans-serif; font-size: 13px; color: #333; line-height: 1.5; }}
+                                    h2 {{ text-align: center; color: #1e3a5f; margin-bottom: 5px; text-transform: uppercase; }}
+                                    .subtitle {{ text-align: center; font-weight: bold; margin-bottom: 25px; font-size: 14px; }}
+                                    h3 {{ color: #2d6a4f; border-bottom: 2px solid #2d6a4f; padding-bottom: 4px; margin-top: 25px; }}
+                                    table {{ width: 100%; border-collapse: collapse; margin-bottom: 15px; page-break-inside: avoid; }}
+                                    th, td {{ border: 1px solid #999; padding: 6px; text-align: center; }}
+                                    th {{ background-color: #f2f2f2; }}
+                                    .page-break {{ page-break-before: always; }}
+                                </style>
+                            </head>
+                            <body>
+                                <h2>BẢN TIN CẢNH BÁO RỦI RO KHÍ HẬU NÔNG NGHIỆP<br>XÃ {commune_name.upper()}</h2>
+                                <div class="subtitle">Kỳ dự báo: Tháng {start_m} đến {end_m} năm {yr if mo + 3 <= 12 else yr+1}</div>
 
-                    <h3>1. Đặc trưng khí hậu trung bình nhiều năm</h3>
-                    {img_tag}
+                                <h3>1. Đặc trưng khí hậu trung bình nhiều năm</h3>
+                                {img_tag}
 
-                    <h3>2. Dự báo khí hậu xác suất</h3>
-                    {html_table}
+                                <h3>2. Dự báo khí hậu xác suất</h3>
+                                {html_table}
 
-                    <h3>3. Mức độ rủi ro đối với cây trồng và vật nuôi</h3>
-                    {"<br>".join(html_risks_list)}
+                                <h3>3. Mức độ rủi ro đối với cây trồng và vật nuôi</h3>
+                                {"<br>".join(html_risks_list)}
 
-                    <div style="margin-top: 40px; text-align: right;">
-                        <p><strong>Phòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu</strong><br>
-                        Viện Khoa học Khí tượng Thủy văn và Biến đổi khí hậu</p>
-                    </div>
-                </body>
-                </html>
-                """
+                                <div style="margin-top: 40px; text-align: right;">
+                                    <p><strong>Phòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu</strong><br>
+                                    Viện Khoa học Khí tượng Thủy văn và Biến đổi khí hậu</p>
+                                </div>
+                            </body>
+                            </html>
+                            """
 
-                # 3. Kết xuất PDF thông qua pdfkit
-                options = {
-                    'page-size': 'A4',
-                    'margin-top': '15mm',
-                    'margin-right': '15mm',
-                    'margin-bottom': '15mm',
-                    'margin-left': '15mm',
-                    'encoding': "UTF-8",
-                    'no-outline': None,
-                    'enable-local-file-access': None
-                }
-                pdf_data = pdfkit.from_string(full_html, False, options=options)
-                st.session_state[export_key] = pdf_data
-
-            except ImportError:
-                st.error("❌ Hệ thống thiếu thư viện. Yêu cầu chạy lệnh: `pip install pdfkit kaleido`")
-            except Exception as e:
-                st.error(f"❌ Có lỗi xảy ra trong quá trình tạo PDF (Chắc chắn đã cài wkhtmltopdf trên Server): {e}")
-
-    # Hiển thị nút Download nếu PDF đã được tạo thành công trong session
-    if export_key in st.session_state:
-        st.success("✅ File PDF đã sẵn sàng!")
-        st.download_button(
-            label="⬇️ Nhấn để tải xuống file PDF",
-            data=st.session_state[export_key],
-            file_name=f"Bantin_KhiHauNN_Xa_{commune_name.replace(' ', '_')}_{yr}{mo:02d}.pdf",
-            mime="application/pdf",
-            type="primary"
-        )
+                            options = {
+                                'page-size': 'A4',
+                                'margin-top': '15mm',
+                                'margin-right': '15mm',
+                                'margin-bottom': '15mm',
+                                'margin-left': '15mm',
+                                'encoding': "UTF-8",
+                                'no-outline': None,
+                                'enable-local-file-access': None
+                            }
+                            pdf_data = pdfkit.from_string(full_html, False, options=options, configuration=config)
+                            
+                            st.session_state[export_key] = pdf_data
+                            st.rerun() # Tải lại phần tử để hiện nút Tải xuống
+                            
+                        except ImportError:
+                            st.error("❌ Thiết lập thư viện chưa đủ. Vui lòng cài đặt: `pip install pdfkit kaleido`")
+                        except Exception as e:
+                            st.error(f"❌ Lỗi wkhtmltopdf: {e}")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1572,7 +1579,8 @@ def page_ban_tin_xa():
     st.markdown('<div class="module-header">📋 Bản tin cảnh báo rủi ro khí hậu</div>',
                 unsafe_allow_html=True)
 
-    col1, col2 = st.columns([2, 3])
+    # Chia làm 3 cột để thêm nút tải PDF về góc bên phải
+    col1, col2, col3 = st.columns([2.5, 2.5, 1.5])
 
     with col1:
         with st.spinner("🔍 Kiểm tra dữ liệu …"):
@@ -1604,6 +1612,9 @@ def page_ban_tin_xa():
         st.markdown("**📅 Kỳ dự báo:**")
         st.info(f"Tháng {month_labels[0].split('Tháng ')[1]} → {month_labels[-1].split('Tháng ')[1]}")
         st.markdown(f"**🌾 Đối tượng:** {', '.join(COMMUNE_CROPS.get(sel_commune, []))}")
+    
+    # Khởi tạo khung chứa rỗng (Placeholder) ở cột ngoài cùng bên phải để truyền nút tải PDF vào
+    pdf_ui_placeholder = col3.empty()
 
     st.markdown("---")
 
@@ -1640,6 +1651,7 @@ def page_ban_tin_xa():
         df_decadal=df_decadal,
         xacsuat_data=xacsuat_data,
         gdf_xa=gdf_xa,
+        pdf_placeholder=pdf_ui_placeholder, # Truyền khung chứa xuống hàm để bắn UI ngược lên trên
     )
 
 
