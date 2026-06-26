@@ -310,7 +310,7 @@ def load_shapefiles():
         pass
 
     try:
-        p = _download_shp("QN_XA_FINAL")
+        p = _download_shp("xa_quangninh")
         if p:
             gdf_xa = _read_safe(p)
     except Exception:
