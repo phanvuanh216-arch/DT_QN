@@ -13,5 +13,3 @@ folium
 streamlit-folium
 branca
 plotly
-pdfkit
-kaleido
