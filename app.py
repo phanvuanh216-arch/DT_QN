@@ -1013,43 +1013,105 @@ def build_climate_normal_chart(commune_name, df_r, df_t, forecast_months):
 
 def render_xacsuat_table(xacsuat_data, month_labels):
     """
-    Bảng xác suất dự báo theo mẫu biểu.
-    xacsuat_data: {month_label: {"T": (thap, xapxi, caohon), "R": (thap, xapxi, caohon)}}
+    Bảng xác suất dự báo – đúng theo mẫu biểu:
+      • Cột dọc "Dự báo tháng" bên trái (rowspan toàn bảng)
+      • Hàng 1 header: Tháng | <số tháng> colspan=3 mỗi tháng
+      • Hàng 2 header: Tỷ lệ | Thấp hơn / Xấp xi / Cao hơn × n_tháng
+      • Dữ liệu: số nguyên (không có ký hiệu %)
     """
     def _fmt(v):
-        return f"{int(round(v))}%" if v is not None else "—"
+        return str(int(round(v))) if v is not None else "—"
 
     rows_T, rows_R = [], []
     for lbl in month_labels:
-        probs = xacsuat_data.get(lbl, {})
+        probs  = xacsuat_data.get(lbl, {})
         t_vals = probs.get("T", (None, None, None))
         r_vals = probs.get("R", (None, None, None))
         rows_T.extend([_fmt(v) for v in t_vals])
         rows_R.extend([_fmt(v) for v in r_vals])
 
-    html = """
-    <table style="border-collapse:collapse; width:100%; font-size:13px; font-family:Arial;">
-      <thead>
-        <tr style="background:#1e3a5f; color:white; text-align:center;">
-          <th rowspan="2" style="border:1px solid #aaa; padding:4px 8px; width:180px;">Yếu tố khí hậu</th>
-    """
-    for lbl in month_labels:
-        m_str = lbl.replace("Tháng ", "")
-        html += f'<th colspan="3" style="border:1px solid #aaa; padding:4px 8px;">Tháng {m_str}</th>'
-    html += "</tr><tr style='background:#2d6a4f; color:white; text-align:center;'>"
-    for _ in month_labels:
-        html += '<th style="border:1px solid #aaa; padding:3px 5px; font-size:11px;">Thấp hơn<br>TBNN (%)</th>'
-        html += '<th style="border:1px solid #aaa; padding:3px 5px; font-size:11px;">Xấp xỉ<br>TBNN (%)</th>'
-        html += '<th style="border:1px solid #aaa; padding:3px 5px; font-size:11px;">Cao hơn<br>TBNN (%)</th>'
-    html += "</tr></thead><tbody>"
+    n_months = len(month_labels)
+    n_data_cols = n_months * 3  # 3 cột xác suất mỗi tháng
 
-    for row_data, var_label, bg in [
-        (rows_T, "Nhiệt độ trung bình (%)", "#e3f2fd"),
-        (rows_R, "Lượng mưa (%)", "#e8f5e9"),
-    ]:
-        html += f'<tr><td style="border:1px solid #aaa; padding:4px 8px; background:{bg}; font-weight:bold;">{var_label}</td>'
+    # Số hàng nội dung (2: nhiệt độ + mưa)
+    n_body_rows = 2
+
+    # Style chung
+    border  = "border:1px solid #8ba3c1;"
+    th_base = f"{border} padding:5px 8px; text-align:center; font-size:12px;"
+    td_base = f"{border} padding:5px 8px; text-align:center; font-size:13px;"
+    label_bg  = "background:#c7d8ea;"   # nền header hàng nhãn (xanh nhạt như ảnh)
+    header_bg = "background:#dce8f4;"   # nền header tháng
+    ratio_bg  = "background:#edf3fb;"   # nền hàng Tỷ lệ
+    vert_bg   = "background:#b8cfe4;"   # nền cột dọc "Dự báo tháng"
+    row_t_bg  = "background:#f0f6ff;"
+    row_r_bg  = "background:#f5faf0;"
+
+    html = (
+        '<table style="border-collapse:collapse; width:100%; '
+        'font-size:13px; font-family:Arial, sans-serif; '
+        'border:2px solid #5a7fa8;">'
+        "<thead>"
+    )
+
+    # ── Hàng 1: cột dọc + "Tháng" + số tháng ──
+    html += "<tr>"
+    # Cột dọc "Dự báo tháng" — rowspan = 2 header + 2 body = 4
+    html += (
+        f'<th rowspan="{2 + n_body_rows}" '
+        f'style="{th_base} {vert_bg} width:28px; '
+        f'writing-mode:vertical-rl; transform:rotate(180deg); '
+        f'font-weight:bold; color:#1e3a5f; letter-spacing:2px; '
+        f'padding:12px 4px;">'
+        "Dự báo tháng"
+        "</th>"
+    )
+    # Ô "Tháng" (rowspan 1, colspan 1 – label cột)
+    html += (
+        f'<th style="{th_base} {label_bg} width:130px; font-weight:bold; color:#1e3a5f;">'
+        "Tháng"
+        "</th>"
+    )
+    # Số tháng, mỗi ô colspan=3
+    for lbl in month_labels:
+        m_str = lbl.replace("Tháng ", "").split("/")[0]   # chỉ lấy số tháng
+        html += (
+            f'<th colspan="3" style="{th_base} {header_bg} font-weight:bold; color:#1e3a5f;">'
+            f"{m_str}"
+            "</th>"
+        )
+    html += "</tr>"
+
+    # ── Hàng 2: "Tỷ lệ" + Thấp hơn / Xấp xi / Cao hơn × n_tháng ──
+    html += "<tr>"
+    html += (
+        f'<th style="{th_base} {ratio_bg} font-weight:bold; color:#1e3a5f;">'
+        "Tỷ lệ"
+        "</th>"
+    )
+    for _ in month_labels:
+        html += f'<th style="{th_base} {ratio_bg} color:#1e3a5f; font-weight:normal; width:52px;">Thấp<br>hơn</th>'
+        html += f'<th style="{th_base} {ratio_bg} color:#1e3a5f; font-weight:normal; width:52px;">Xấp xi</th>'
+        html += f'<th style="{th_base} {ratio_bg} color:#1e3a5f; font-weight:normal; width:52px;">Cao<br>hơn</th>'
+    html += "</tr>"
+
+    html += "</thead><tbody>"
+
+    # ── Hàng dữ liệu ──
+    row_specs = [
+        (rows_T, "Nhiệt độ trung<br>bình nhiều<br>năm (%)", row_t_bg),
+        (rows_R, "Lượng mưa<br>trung bình<br>nhiều năm<br>(mm)",  row_r_bg),
+    ]
+    for row_data, var_label, bg in row_specs:
+        html += "<tr>"
+        html += (
+            f'<td style="{td_base} {bg} text-align:center; font-weight:bold; '
+            f'color:#1e3a5f; font-size:12px; width:130px;">'
+            f"{var_label}"
+            "</td>"
+        )
         for val in row_data:
-            html += f'<td style="border:1px solid #aaa; padding:4px 8px; text-align:center;">{val}</td>'
+            html += f'<td style="{td_base} {bg}">{val}</td>'
         html += "</tr>"
 
     html += "</tbody></table>"
