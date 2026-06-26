@@ -845,15 +845,13 @@ def build_climate_normal_chart(commune_name, df_r, df_t, forecast_months):
             showgrid=False,
         ),
         yaxis=dict(
-            title="Rainfall (mm)",
-            titlefont=dict(color="#1565c0", size=11),
+            title=dict(text="Rainfall (mm)", font=dict(color="#1565c0", size=11)),
             tickfont=dict(color="#1565c0", size=10),
             range=[0, max(R_vals) * 1.25 if R_vals else 400],
             showgrid=True, gridcolor="rgba(180,180,180,0.3)",
         ),
         yaxis2=dict(
-            title="Temperature (°C)",
-            titlefont=dict(color="#e65100", size=11),
+            title=dict(text="Temperature (°C)", font=dict(color="#e65100", size=11)),
             tickfont=dict(color="#e65100", size=10),
             overlaying="y", side="right",
             range=[min(T_vals) - 3, max(T_vals) + 5] if T_vals else [15, 40],
