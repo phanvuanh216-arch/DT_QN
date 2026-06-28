@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Ứng dụng Streamlit - Hệ thống Bản tin Khí hậu Nông nghiệp Quảng Ninh
-THAY ĐỔI v1.3.0 – MODULE BẢN TIN CẢNH BÁO RỦI RO KHÍ HẬU:
+THAY ĐỔI v1.3.3 – MODULE BẢN TIN CẢNH BÁO RỦI RO KHÍ HẬU:
   [NEW]  Module Bản tin xã: đầy đủ biểu đồ TBNN, dự báo xác suất, bảng rủi ro
   [PERF] Giữ nguyên toàn bộ tối ưu v1.2.0 cho module Dự báo khí hậu mùa
 """
@@ -85,6 +85,7 @@ SHP_QN_URL      = "https://raw.githubusercontent.com/phanvuanh216-arch/DT_QN/mai
 ERA5_R_URL      = "https://raw.githubusercontent.com/phanvuanh216-arch/DT_QN/main/R_ERA5_CDFT_corrected.xlsx"
 ERA5_T_URL      = "https://raw.githubusercontent.com/phanvuanh216-arch/DT_QN/main/T2m_ERA5_QM_corrected.xlsx"
 ECOLOGY_URL     = "https://raw.githubusercontent.com/phanvuanh216-arch/DT_QN/main/B%E1%BA%A3ng%20sinh%20th%C3%A1i%20v%C3%A0%20m%C3%B9a%20v%E1%BB%A5_19-6.xlsx"
+COMMUNE_LONLAT_URL = "https://raw.githubusercontent.com/phanvuanh216-arch/DT_QN/main/lon_lat_quangninh.xlsx"
 
 CLIMATE_VARS = {
     "ano.T2m":  {"label": "Nhiệt độ trung bình (T2m)", "unit": "°C",  "cmap": "RdBu_r", "levels": list(range(-5, 6))},
@@ -413,16 +414,16 @@ def load_era5_data():
 
 def get_commune_monthly_climate(commune_name, df_r, df_t):
     """
-    Get 1989-2018 monthly climatology for a commune.
+    Get 1981-2024 monthly climatology for a commune.
     Returns dict: {month: {"T": mean_T, "R": total_R}} for months 1-12.
     """
     col_key = COMMUNE_COL_MAP.get(commune_name)
     if col_key is None or df_r is None or df_t is None:
         return {}
 
-    # Filter 1989-2018
-    mask_r = (df_r["year"] >= 1989) & (df_r["year"] <= 2018)
-    mask_t = (df_t["year"] >= 1989) & (df_t["year"] <= 2018)
+    # Filter 1981-2024
+    mask_r = (df_r["year"] >= 1981) & (df_r["year"] <= 2024)
+    mask_t = (df_t["year"] >= 1981) & (df_t["year"] <= 2024)
 
     # Check column presence
     r_col = None
@@ -454,6 +455,58 @@ def get_commune_monthly_climate(commune_name, df_r, df_t):
         result[m] = {"T": round(float(temp_monthly), 1) if not np.isnan(temp_monthly) else 0,
                      "R": round(float(rain_monthly), 1) if not np.isnan(rain_monthly) else 0}
     return result
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def load_commune_lonlat():
+    """
+    Tải tọa độ (kinh độ, vĩ độ) của từng xã từ file Excel trên GitHub.
+    File có 3 cột: 'year' (thực chất là mã xã / key, trùng với COMMUNE_COL_MAP),
+    'LON', 'LAT'.
+    Trả về dict: {col_key: (lon, lat)}
+    """
+    try:
+        r = requests.get(COMMUNE_LONLAT_URL, timeout=30)
+        if r.status_code != 200:
+            return {}
+        df = pd.read_excel(io.BytesIO(r.content), sheet_name=0, header=0)
+        df.columns = [str(c).strip() for c in df.columns]
+        key_col = None
+        for c in df.columns:
+            if c.lower() in ("year", "ma_xa", "key", "xa", "commune"):
+                key_col = c
+                break
+        if key_col is None:
+            key_col = df.columns[0]
+        lon_col = next((c for c in df.columns if c.upper() == "LON"), None)
+        lat_col = next((c for c in df.columns if c.upper() == "LAT"), None)
+        if lon_col is None or lat_col is None:
+            return {}
+
+        result = {}
+        for _, row in df.iterrows():
+            key = str(row[key_col]).strip().lower()
+            try:
+                lon = float(row[lon_col])
+                lat = float(row[lat_col])
+                if np.isfinite(lon) and np.isfinite(lat):
+                    result[key] = (lon, lat)
+            except (TypeError, ValueError):
+                continue
+        return result
+    except Exception:
+        return {}
+
+
+def get_commune_lonlat(commune_name, commune_lonlat_map):
+    """Lấy (lon, lat) của 1 xã, dựa trên COMMUNE_COL_MAP để khớp key."""
+    col_key = COMMUNE_COL_MAP.get(commune_name, "")
+    if not col_key or not commune_lonlat_map:
+        return None, None
+    coord = commune_lonlat_map.get(col_key.lower())
+    if coord is None:
+        return None, None
+    return coord
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -521,6 +574,7 @@ def load_nc_data(nc_bytes: bytes, month_idx: int):
 
 @st.cache_data(ttl=1800, show_spinner=False)
 def fetch_xacsuat_periods() -> list:
+    """Lấy danh sách các kỳ (thư mục YYYYMM) hiện có trên server xác suất."""
     try:
         resp = requests.get(XACSUAT_URL, timeout=10)
         resp.raise_for_status()
@@ -529,88 +583,150 @@ def fetch_xacsuat_periods() -> list:
         return []
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
-def load_xacsuat_for_commune(period: str, commune_name: str, month_offsets=(1,2,3)):
-    """
-    Load probability NC files for T2m and R.
-    Returns dict: {month_label: {"T": (thap, xapxi, caohon), "R": (thap, xapxi, caohon)}}
-    Reads commune value via IDW from nearest grid point.
-    """
-    lon_c = None
-    lat_c = None
-    # Try to get from ERA5 data (stored in col mapping)
-    # Fall back to approximate lookup
-    col_key = COMMUNE_COL_MAP.get(commune_name, "")
+# Biến xác suất hiện có trên server, khớp với CLIMATE_VARS (T2m, R)
+XACSUAT_CATEGORY_PREFIX = {
+    "thap_hon": "XSHC",   # Xác suất thấp hơn TBNN (XSHC)
+    "xap_xi":   "XSCC",   # Xác suất xấp xỉ TBNN (XSCC)
+    "cao_hon":  "XSVC",   # Xác suất cao hơn TBNN (XSVC)
+}
 
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def download_xacsuat_nc(period: str, category_prefix: str, var_name: str):
+    """
+    Tải 1 file xác suất NC, ví dụ: XSHC.T2m.nc trong thư mục
+    XACSUAT_URL/<period>/
+    """
+    url = f"{XACSUAT_URL}{period}/{category_prefix}.{var_name}.nc"
+    try:
+        resp = requests.get(url, timeout=60)
+        return resp.content if resp.status_code == 200 else None
+    except Exception:
+        return None
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _extract_xacsuat_grid(nc_bytes: bytes, month_idx: int):
+    """
+    Đọc 1 file xác suất NC (1 biến data duy nhất, dim time/lat/lon) và trả về
+    lưới (lons, lats, vals) cho thời điểm month_idx (0 = tháng dự báo gần nhất kế tiếp).
+    Giá trị trả về đã chuẩn hoá về thang % (0-100).
+    """
+    if nc_bytes is None:
+        return None, None, None
+    with tempfile.NamedTemporaryFile(suffix=".nc", delete=False) as f:
+        f.write(nc_bytes); tmp = f.name
+    try:
+        ds = xr.open_dataset(tmp)
+        coord_names = {c.lower() for c in ds.coords}
+        data_vars = [v for v in ds.data_vars if v.lower() not in coord_names]
+        if not data_vars:
+            ds.close(); os.unlink(tmp); return None, None, None
+        da = ds[data_vars[0]]
+
+        time_dims = [d for d in da.dims if 'time' in d.lower()]
+        if time_dims:
+            n_time = da.sizes[time_dims[0]]
+            da = da.isel({time_dims[0]: min(month_idx, n_time - 1)})
+
+        lat_names = [d for d in da.dims if 'lat' in d.lower() or d == 'y']
+        lon_names = [d for d in da.dims if 'lon' in d.lower() or d == 'x']
+        if not lat_names or not lon_names:
+            ds.close(); os.unlink(tmp); return None, None, None
+
+        lats = da[lat_names[0]].values
+        lons = da[lon_names[0]].values
+        vals = da.values
+        if lons.ndim == 1:
+            lons, lats = np.meshgrid(lons, lats)
+
+        flat_lon, flat_lat, flat_val = lons.ravel(), lats.ravel(), vals.ravel().astype(float)
+        ok = np.isfinite(flat_val) & (np.abs(flat_val) < 1e10)
+        ds.close(); os.unlink(tmp)
+        return flat_lon[ok], flat_lat[ok], flat_val[ok]
+    except Exception:
+        try: os.unlink(tmp)
+        except Exception: pass
+        return None, None, None
+
+
+def _point_value_idw(lons, lats, vals, lon_c, lat_c, k=4, power=2.0, eps=1e-9):
+    """Nội suy IDW giá trị tại 1 điểm (lon_c, lat_c) từ lưới điểm dữ liệu."""
+    if lons is None or lons.size == 0 or lon_c is None or lat_c is None:
+        return None
+    try:
+        tree = cKDTree(np.column_stack([lons, lats]))
+        kk = min(k, lons.size)
+        dists, idxs = tree.query([lon_c, lat_c], k=kk)
+        dists = np.atleast_1d(dists)
+        idxs = np.atleast_1d(idxs)
+        if np.any(dists <= eps):
+            return float(vals[idxs[np.argmin(dists)]])
+        w = 1.0 / np.maximum(dists, eps) ** power
+        return float(np.sum(w * vals[idxs]) / np.sum(w))
+    except Exception:
+        return None
+
+
+def _extract_prob_at_point(period, var_name, month_idx, lon_c, lat_c):
+    """
+    Với 1 biến (T2m hoặc R) và 1 tháng dự báo (month_idx, 0-based),
+    tải 3 file XSHC/XSCC/XSVC, nội suy giá trị tại tọa độ xã,
+    rồi chuẩn hoá tổng 3 xác suất về 100%.
+    Trả về (thap_hon, xap_xi, cao_hon) hoặc (None, None, None) nếu thiếu dữ liệu.
+    """
+    raw_vals = []
+    for cat_key in ("thap_hon", "xap_xi", "cao_hon"):
+        prefix = XACSUAT_CATEGORY_PREFIX[cat_key]
+        nc_bytes = download_xacsuat_nc(period, prefix, var_name)
+        lons, lats, vals = _extract_xacsuat_grid(nc_bytes, month_idx) if nc_bytes else (None, None, None)
+        v = _point_value_idw(lons, lats, vals, lon_c, lat_c)
+        raw_vals.append(v)
+
+    if any(v is None for v in raw_vals):
+        return (None, None, None)
+
+    total = sum(raw_vals)
+    if total <= 0:
+        return (None, None, None)
+    return tuple(round(v / total * 100) for v in raw_vals)
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def load_xacsuat_for_commune(period: str, commune_name: str, lon_c, lat_c, month_offsets=(1, 2, 3)):
+    """
+    Tải dự báo xác suất khí hậu tháng (Nhiệt độ T2m, Lượng mưa R) cho 1 xã,
+    dựa trên tọa độ (lon_c, lat_c) của xã đó.
+    Tự động cập nhật theo kỳ dự báo mới nhất có trên server (period truyền vào).
+
+    Trả về dict: {month_label: {"T": (thap, xapxi, caohon), "R": (thap, xapxi, caohon)}}
+    """
     result = {}
     yr, mo = int(period[:4]), int(period[4:])
+
+    if lon_c is None or lat_c is None:
+        # Không có tọa độ xã -> không thể nội suy, trả bảng trống có cấu trúc
+        for offset in month_offsets:
+            m2 = mo + offset
+            y2 = yr + (m2 - 1) // 12
+            m2 = ((m2 - 1) % 12) + 1
+            label = f"Tháng {m2:02d}/{y2}"
+            result[label] = {"T": (None, None, None), "R": (None, None, None)}
+        return result
 
     for offset in month_offsets:
         m2 = mo + offset
         y2 = yr + (m2 - 1) // 12
         m2 = ((m2 - 1) % 12) + 1
         label = f"Tháng {m2:02d}/{y2}"
+        month_idx = offset - 1
 
-        t_bytes = download_nc(period, "xacsuat.T2m", XACSUAT_URL)
-        r_bytes = download_nc(period, "xacsuat.R", XACSUAT_URL)
+        t_prob = _extract_prob_at_point(period, "T2m", month_idx, lon_c, lat_c)
+        r_prob = _extract_prob_at_point(period, "R", month_idx, lon_c, lat_c)
 
-        t_prob = _extract_prob_at_commune(t_bytes, offset - 1) if t_bytes else None
-        r_prob = _extract_prob_at_commune(r_bytes, offset - 1) if r_bytes else None
-
-        result[label] = {
-            "T": t_prob if t_prob else (None, None, None),
-            "R": r_prob if r_prob else (None, None, None),
-        }
+        result[label] = {"T": t_prob, "R": r_prob}
 
     return result
-
-
-def _extract_prob_at_commune(nc_bytes, month_idx):
-    """Extract (thấp, xấp xỉ, cao hơn) probability from NC bytes at month_idx."""
-    if nc_bytes is None:
-        return None
-    with tempfile.NamedTemporaryFile(suffix=".nc", delete=False) as f:
-        f.write(nc_bytes); tmp = f.name
-    try:
-        ds = xr.open_dataset(tmp)
-        data_vars = [v for v in ds.data_vars]
-        if not data_vars:
-            ds.close(); os.unlink(tmp); return None
-
-        # Expect 3 variables: below-normal, near-normal, above-normal
-        # or 3 dimensions in single var (prob_dim, time, lat, lon)
-        da = ds[data_vars[0]]
-        time_dims = [d for d in da.dims if 'time' in d.lower() or 'month' in d.lower()]
-
-        # If has category dimension: shape = (3, months, lat, lon) or (months, 3, lat, lon)
-        cat_dims = [d for d in da.dims if 'cat' in d.lower() or 'class' in d.lower() or 'prob' in d.lower()]
-
-        vals = []
-        if len(data_vars) >= 3:
-            # 3 separate variables for 3 categories
-            for var in data_vars[:3]:
-                da_v = ds[var]
-                if time_dims:
-                    da_v = da_v.isel({time_dims[0]: min(month_idx, da_v.sizes[time_dims[0]] - 1)})
-                vals.append(float(da_v.mean().values))
-        elif cat_dims:
-            for i in range(3):
-                da_v = da.isel({cat_dims[0]: i})
-                if time_dims:
-                    da_v = da_v.isel({time_dims[0]: min(month_idx, da_v.sizes[time_dims[0]] - 1)})
-                vals.append(float(da_v.mean().values))
-        else:
-            ds.close(); os.unlink(tmp); return None
-
-        ds.close(); os.unlink(tmp)
-        if len(vals) == 3:
-            total = sum(vals) if sum(vals) > 0 else 1
-            return tuple(round(v/total*100) for v in vals)
-        return None
-    except Exception:
-        try: os.unlink(tmp)
-        except: pass
-        return None
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -788,7 +904,7 @@ def compute_decade_risks(df_decadal):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# CHART: TBNN (Climate normal chart 1989-2018)
+# CHART: TBNN (Climate normal chart 1981-2024)
 # ══════════════════════════════════════════════════════════════════════════════
 
 def build_climate_normal_chart(commune_name, df_r, df_t, forecast_months):
@@ -801,7 +917,7 @@ def build_climate_normal_chart(commune_name, df_r, df_t, forecast_months):
     if not clim:
         return None
 
-    months_vn = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+    months_vn = ["Th1","Th2","Th3","Th4","Th5","Th6","Th7","Th8","Th9","Th10","Th11","Th12"]
     R_vals = [clim.get(m, {}).get("R", 0) for m in range(1, 13)]
     T_vals = [clim.get(m, {}).get("T", 0) for m in range(1, 13)]
 
@@ -811,7 +927,7 @@ def build_climate_normal_chart(commune_name, df_r, df_t, forecast_months):
 
     fig.add_trace(go.Bar(
         x=months_vn, y=R_vals,
-        name="Rainfall",
+        name="Lượng mưa",
         marker_color=bar_colors,
         yaxis="y1",
         hovertemplate="Mưa: %{y:.0f} mm<extra></extra>",
@@ -819,7 +935,7 @@ def build_climate_normal_chart(commune_name, df_r, df_t, forecast_months):
 
     fig.add_trace(go.Scatter(
         x=months_vn, y=T_vals,
-        name="Temperature",
+        name="Nhiệt độ",
         mode="lines+markers",
         line=dict(color="#e65100", width=2.5),
         marker=dict(color="#e65100", size=7, symbol="circle"),
@@ -837,7 +953,7 @@ def build_climate_normal_chart(commune_name, df_r, df_t, forecast_months):
 
     fig.update_layout(
         title=dict(
-            text=f"<b>Climate Trend of Past Normal Years (1989–2018)</b>",
+            text="<b>Đặc trưng khí hậu trung bình nhiều năm (1981–2024)</b>",
             font=dict(size=13, family="Arial"), x=0.5, xanchor="center",
         ),
         xaxis=dict(
@@ -845,13 +961,13 @@ def build_climate_normal_chart(commune_name, df_r, df_t, forecast_months):
             showgrid=False,
         ),
         yaxis=dict(
-            title=dict(text="Rainfall (mm)", font=dict(color="#1565c0", size=11)),
+            title=dict(text="Lượng mưa (mm)", font=dict(color="#1565c0", size=11)),
             tickfont=dict(color="#1565c0", size=10),
             range=[0, max(R_vals) * 1.25 if R_vals else 400],
             showgrid=True, gridcolor="rgba(180,180,180,0.3)",
         ),
         yaxis2=dict(
-            title=dict(text="Temperature (°C)", font=dict(color="#e65100", size=11)),
+            title=dict(text="Nhiệt độ (°C)", font=dict(color="#e65100", size=11)),
             tickfont=dict(color="#e65100", size=10),
             overlaying="y", side="right",
             range=[min(T_vals) - 3, max(T_vals) + 5] if T_vals else [15, 40],
@@ -887,7 +1003,7 @@ def render_xacsuat_table(xacsuat_data, month_labels):
         return str(int(round(v))) if v is not None else "—"
 
     rows_T = ["Nhiệt độ trung bình nhiều năm (%)"]
-    rows_R = ["Lượng mưa trung bình nhiều năm (mm)"]
+    rows_R = ["Lượng mưa trung bình nhiều năm (%)"]
 
     for lbl in month_labels:
         probs = xacsuat_data.get(lbl, {})
@@ -915,7 +1031,7 @@ def render_xacsuat_table(xacsuat_data, month_labels):
     html += "</tr></thead><tbody>"
 
     for row_data, var_label in [(rows_T, "Nhiệt độ TB nhiều năm (%)"),
-                                 (rows_R, "Lượng mưa TB nhiều năm (mm)")]:
+                                 (rows_R, "Lượng mưa TB nhiều năm (%)")]:
         html += f'<tr><td style="border:1px solid #aaa; padding:4px 8px; background:#e8f4f8; font-weight:bold;">{var_label}</td>'
         for val in row_data[1:]:
             html += f'<td style="border:1px solid #aaa; padding:4px 8px; text-align:center;">{val}</td>'
@@ -1355,7 +1471,7 @@ def render_commune_bulletin(commune_name, crops, period, month_labels,
     else:
         # Fallback: display placeholder table structure
         tbl_data = {
-            "Biến": ["Nhiệt độ TB nhiều năm (%)", "Lượng mưa TB nhiều năm (mm)"],
+            "Biến": ["Nhiệt độ TB nhiều năm (%)", "Lượng mưa TB nhiều năm (%)"],
         }
         for lbl in month_labels:
             m = lbl.replace("Tháng ","").split("/")[0]
@@ -1560,8 +1676,17 @@ def page_ban_tin_xa():
     with st.spinner("📥 Đang tải dự báo theo thập …"):
         df_decadal = load_member_decadal(sel_period)
 
+    with st.spinner("📍 Đang tải tọa độ xã …"):
+        commune_lonlat_map = load_commune_lonlat()
+    lon_c, lat_c = get_commune_lonlat(sel_commune, commune_lonlat_map)
+    if lon_c is None or lat_c is None:
+        st.warning(
+            f"⚠️ Không tìm thấy tọa độ cho xã **{sel_commune}** trong file "
+            f"`lon_lat_quangninh.xlsx` – bảng xác suất sẽ hiển thị giá trị chờ."
+        )
+
     with st.spinner("📥 Đang tải dự báo xác suất …"):
-        xacsuat_data = load_xacsuat_for_commune(sel_period, sel_commune)
+        xacsuat_data = load_xacsuat_for_commune(sel_period, sel_commune, lon_c, lat_c)
 
     # Load shapefile for commune map
     with st.spinner("⏳ Đang tải shapefile …"):
@@ -1615,7 +1740,7 @@ with st.sidebar:
     st.markdown("Phòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu")
     st.markdown("Viện Khoa học Khí tượng Thủy văn Môi trường và Biển")
     st.markdown("---")
-    st.markdown("*Phiên bản 1.3.0 – 06/2026*")
+    st.markdown("*Phiên bản 1.3.3 – 06/2026*")
 
 if   menu == "🏠 Tổng quan":                          page_tong_quan()
 elif menu == "🔄 Dự báo khí hậu mùa":                page_du_bao()
