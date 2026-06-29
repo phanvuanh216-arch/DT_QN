@@ -1402,17 +1402,46 @@ def build_commune_map_figure(commune_name, gdf_xa_all):
 # EXPORT BẢN TIN RA HTML (mở tab mới để xem / in / lưu)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _fig_to_html_div(fig, div_id):
-    """Chuyển 1 plotly Figure thành đoạn HTML (div + script) để nhúng vào bản tin export."""
+def _fig_to_html_div(fig, div_id, export_height=None):
+    """
+    Chuyển 1 plotly Figure thành đoạn HTML (div + script) để nhúng vào bản tin export.
+
+    - export_height: nếu truyền vào, set lại chiều cao của figure (px) trước khi xuất,
+      để bản đồ vị trí xã và biểu đồ TBNN có cùng chiều cao, nằm vừa trong 1 vùng.
+    - Script vẽ (Plotly.newPlot) được bọc trong logic polling, chỉ chạy SAU KHI
+      thư viện Plotly (tải từ CDN) đã sẵn sàng — tránh tình trạng div trống do
+      script chạy trước khi window.Plotly được định nghĩa.
+    """
     if fig is None:
         return ""
     try:
-        return fig.to_html(
+        if export_height:
+            fig = go.Figure(fig)  # clone để không ảnh hưởng figure dùng hiển thị trong app
+            fig.update_layout(height=export_height, autosize=True)
+
+        raw_html = fig.to_html(
             full_html=False,
             include_plotlyjs=False,
             div_id=div_id,
             config={"displayModeBar": False, "responsive": True},
         )
+        m = re.search(r"(.*?)<script>(.*)</script>(.*)", raw_html, re.S)
+        if not m:
+            return raw_html
+        before, script_body, after = m.group(1), m.group(2), m.group(3)
+        wrapped_script = f"""<script>
+        (function() {{
+            function __renderWhenReady() {{
+                if (window.Plotly) {{
+                    {script_body}
+                }} else {{
+                    setTimeout(__renderWhenReady, 50);
+                }}
+            }}
+            __renderWhenReady();
+        }})();
+        </script>"""
+        return before + wrapped_script + after
     except Exception:
         return ""
 
@@ -1436,8 +1465,9 @@ def build_full_bulletin_html(commune_name, crops, period, month_labels,
     fig_map = build_commune_map_figure(commune_name, gdf_xa)
     fig_clim = build_climate_normal_chart(commune_name, df_r, df_t, forecast_months)
 
-    map_div = _fig_to_html_div(fig_map, "export_map_div")
-    clim_div = _fig_to_html_div(fig_clim, "export_clim_div")
+    EXPORT_MAP_CHART_HEIGHT = 320
+    map_div = _fig_to_html_div(fig_map, "export_map_div", export_height=EXPORT_MAP_CHART_HEIGHT)
+    clim_div = _fig_to_html_div(fig_clim, "export_clim_div", export_height=EXPORT_MAP_CHART_HEIGHT)
 
     if xacsuat_data and any(xacsuat_data.values()):
         xacsuat_html = render_xacsuat_table(xacsuat_data, month_labels)
@@ -1574,9 +1604,10 @@ def build_full_bulletin_html(commune_name, crops, period, month_labels,
   .info-card .value {{ font-size: 14.5px; font-weight: 700; color: #1e3a5f; }}
   .two-col {{
     display: flex; gap: 22px; margin-bottom: 22px; flex-wrap: wrap;
+    align-items: stretch;
   }}
-  .col-map {{ flex: 1; min-width: 280px; }}
-  .col-chart {{ flex: 2; min-width: 380px; }}
+  .col-map {{ flex: 1; min-width: 280px; display: flex; flex-direction: column; }}
+  .col-chart {{ flex: 2; min-width: 380px; display: flex; flex-direction: column; }}
   .section-title {{
     font-size: 1rem; font-weight: 700; color: #1e3a5f;
     margin: 0 0 10px 0; display: flex; align-items: center; gap: 6px;
@@ -1585,6 +1616,14 @@ def build_full_bulletin_html(commune_name, crops, period, month_labels,
     border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;
     background: #fcfdfe;
   }}
+  .card-chart {{
+    border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;
+    background: #fcfdfe;
+    flex: 1;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+  }}
+  .card-chart > div {{ width: 100%; }}
   hr.sep {{ border: none; border-top: 1px solid #e2e8f0; margin: 22px 0; }}
   .risk-block {{ margin-bottom: 22px; }}
   .risk-header-export {{
@@ -1647,11 +1686,11 @@ def build_full_bulletin_html(commune_name, crops, period, month_labels,
       <div class="two-col">
         <div class="col-map">
           <div class="section-title">📍 Vị trí xã</div>
-          <div class="card">{map_div if map_div else "<p style='color:#888;'>Không có dữ liệu bản đồ.</p>"}</div>
+          <div class="card-chart">{map_div if map_div else "<p style='color:#888;'>Không có dữ liệu bản đồ.</p>"}</div>
         </div>
         <div class="col-chart">
           <div class="section-title">📈 Đặc trưng khí hậu TBNN (1981–2024)</div>
-          <div class="card">{clim_div if clim_div else "<p style='color:#888;'>Không có dữ liệu biểu đồ.</p>"}</div>
+          <div class="card-chart">{clim_div if clim_div else "<p style='color:#888;'>Không có dữ liệu biểu đồ.</p>"}</div>
         </div>
       </div>
 
