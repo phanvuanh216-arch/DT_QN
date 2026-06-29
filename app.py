@@ -1402,12 +1402,13 @@ def build_commune_map_figure(commune_name, gdf_xa_all):
 # EXPORT BẢN TIN RA HTML (mở tab mới để xem / in / lưu)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _fig_to_html_div(fig, div_id, export_height=None):
+def _fig_to_html_div(fig, div_id, export_height=None, export_width=None):
     """
     Chuyển 1 plotly Figure thành đoạn HTML (div + script) để nhúng vào bản tin export.
 
-    - export_height: nếu truyền vào, set lại chiều cao của figure (px) trước khi xuất,
-      để bản đồ vị trí xã và biểu đồ TBNN có cùng chiều cao, nằm vừa trong 1 vùng.
+    - export_height / export_width: set kích thước cố định (px) trước khi xuất.
+      Khi truyền export_width, dùng autosize=False để Plotly giữ nguyên kích thước
+      khi trình duyệt print — tránh bản đồ bị co/méo so với biểu đồ bên cạnh.
     - Script vẽ (Plotly.newPlot) được bọc trong logic polling, chỉ chạy SAU KHI
       thư viện Plotly (tải từ CDN) đã sẵn sàng — tránh tình trạng div trống do
       script chạy trước khi window.Plotly được định nghĩa.
@@ -1415,9 +1416,17 @@ def _fig_to_html_div(fig, div_id, export_height=None):
     if fig is None:
         return ""
     try:
-        if export_height:
+        if export_height or export_width:
             fig = go.Figure(fig)  # clone để không ảnh hưởng figure dùng hiển thị trong app
-            fig.update_layout(height=export_height, autosize=True)
+            layout_update = {}
+            if export_height:
+                layout_update["height"] = export_height
+            if export_width:
+                layout_update["width"] = export_width
+                layout_update["autosize"] = False
+            else:
+                layout_update["autosize"] = True
+            fig.update_layout(**layout_update)
 
         raw_html = fig.to_html(
             full_html=False,
@@ -1465,9 +1474,12 @@ def build_full_bulletin_html(commune_name, crops, period, month_labels,
     fig_map = build_commune_map_figure(commune_name, gdf_xa)
     fig_clim = build_climate_normal_chart(commune_name, df_r, df_t, forecast_months)
 
-    EXPORT_MAP_CHART_HEIGHT = 320
-    map_div = _fig_to_html_div(fig_map, "export_map_div", export_height=EXPORT_MAP_CHART_HEIGHT)
-    clim_div = _fig_to_html_div(fig_clim, "export_clim_div", export_height=EXPORT_MAP_CHART_HEIGHT)
+    EXPORT_HEIGHT = 330        # chiều cao chung cho cả 2 figure
+    EXPORT_MAP_WIDTH = 400     # bản đồ xã: fixed width → không bị co khi print
+    map_div  = _fig_to_html_div(fig_map,  "export_map_div",
+                                export_height=EXPORT_HEIGHT, export_width=EXPORT_MAP_WIDTH)
+    clim_div = _fig_to_html_div(fig_clim, "export_clim_div",
+                                export_height=EXPORT_HEIGHT)
 
     if xacsuat_data and any(xacsuat_data.values()):
         xacsuat_html = render_xacsuat_table(xacsuat_data, month_labels)
@@ -1603,27 +1615,29 @@ def build_full_bulletin_html(commune_name, crops, period, month_labels,
   .info-card .label {{ font-size: 11.5px; color: #667085; margin-bottom: 2px; }}
   .info-card .value {{ font-size: 14.5px; font-weight: 700; color: #1e3a5f; }}
   .two-col {{
-    display: flex; gap: 22px; margin-bottom: 22px; flex-wrap: wrap;
-    align-items: stretch;
+    display: flex; gap: 18px; margin-bottom: 22px; flex-wrap: nowrap;
+    align-items: flex-start;
   }}
-  .col-map {{ flex: 1; min-width: 280px; display: flex; flex-direction: column; }}
-  .col-chart {{ flex: 2; min-width: 380px; display: flex; flex-direction: column; }}
+  /* Bản đồ vị trí xã: fixed 400px, không co giãn → luôn cân xứng khi in */
+  .col-map {{ flex: 0 0 400px; width: 400px; display: flex; flex-direction: column; }}
+  /* Biểu đồ TBNN: chiếm phần còn lại */
+  .col-chart {{ flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; }}
   .section-title {{
     font-size: 1rem; font-weight: 700; color: #1e3a5f;
-    margin: 0 0 10px 0; display: flex; align-items: center; gap: 6px;
+    margin: 0 0 8px 0; display: flex; align-items: center; gap: 6px;
   }}
   .card {{
     border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;
     background: #fcfdfe;
   }}
   .card-chart {{
-    border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;
+    border: 1px solid #e2e8f0; border-radius: 8px; padding: 6px;
     background: #fcfdfe;
-    flex: 1;
-    display: flex; align-items: center; justify-content: center;
+    height: 344px;
     overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
   }}
-  .card-chart > div {{ width: 100%; }}
+  .card-chart > div {{ width: 100%; height: 100%; }}
   hr.sep {{ border: none; border-top: 1px solid #e2e8f0; margin: 22px 0; }}
   .risk-block {{ margin-bottom: 22px; }}
   .risk-header-export {{
@@ -1649,7 +1663,14 @@ def build_full_bulletin_html(commune_name, crops, period, month_labels,
     .page {{ box-shadow: none; margin: 0; border-radius: 0; max-width: 100%; }}
     .toolbar {{ display: none !important; }}
     .risk-block {{ break-inside: avoid; page-break-inside: avoid; }}
-    .two-col {{ break-inside: avoid; }}
+    /* Giữ 2 cột nằm ngang, không wrap, kích thước cố định khi in */
+    .two-col {{
+      break-inside: avoid; page-break-inside: avoid;
+      display: flex !important; flex-wrap: nowrap !important;
+    }}
+    .col-map  {{ flex: 0 0 400px !important; width: 400px !important; }}
+    .col-chart {{ flex: 1 1 0 !important; min-width: 0 !important; }}
+    .card-chart {{ height: 344px !important; overflow: hidden !important; }}
     .info-row {{ break-inside: avoid; }}
   }}
 </style>
