@@ -1523,6 +1523,11 @@ def build_full_bulletin_html(commune_name, crops, period, month_labels,
 <title>Bản tin khí hậu – Xã {commune_name} – {start_m} đến {end_m}</title>
 <script src="{plotly_cdn}"></script>
 <style>
+  html {{
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    color-adjust: exact;
+  }}
   * {{ box-sizing: border-box; }}
   body {{
     font-family: "Segoe UI", Arial, sans-serif;
@@ -1596,11 +1601,17 @@ def build_full_bulletin_html(commune_name, crops, period, month_labels,
   }}
 
   @media print {{
+    * {{
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+      color-adjust: exact !important;
+    }}
     body {{ background: #fff; }}
     .page {{ box-shadow: none; margin: 0; border-radius: 0; max-width: 100%; }}
     .toolbar {{ display: none !important; }}
     .risk-block {{ break-inside: avoid; page-break-inside: avoid; }}
     .two-col {{ break-inside: avoid; }}
+    .info-row {{ break-inside: avoid; }}
   }}
 </style>
 </head>
@@ -1779,21 +1790,10 @@ def render_commune_bulletin(commune_name, crops, period, month_labels,
 
     st.markdown("---")
 
-    # ─── Thanh công cụ: nút Export bản tin sát lề phải, ngang dòng với mục đối tượng cây trồng ───
-    col_label, col_spacer, col_btn = st.columns([3, 4, 1.4])
-    with col_label:
-        st.markdown(
-            f"**🌱 Đối tượng nông nghiệp:** {', '.join(crops) if crops else '—'}"
-        )
-    with col_btn:
-        render_export_button(
-            commune_name, crops, period, month_labels,
-            df_r, df_t, df_decadal, xacsuat_data, gdf_xa,
-            active_decades, decade_risks,
-            growth_stages_lua, growth_stages_rau,
-            start_m, end_m, yr, mo,
-            button_key="export_bulletin_btn",
-        )
+    # ─── Đối tượng nông nghiệp (nút Export đã chuyển lên đầu trang) ───
+    st.markdown(
+        f"**🌱 Đối tượng nông nghiệp:** {', '.join(crops) if crops else '—'}"
+    )
 
     # ─── Risk tables per crop ───
     for crop in crops:
@@ -1968,13 +1968,6 @@ def page_ban_tin_xa():
         m2 = ((m2 - 1) % 12) + 1
         month_labels.append(f"Tháng {m2:02d}/{y2}")
 
-    with col2:
-        st.markdown("**📅 Kỳ dự báo:**")
-        st.info(f"Tháng {month_labels[0].split('Tháng ')[1]} → {month_labels[-1].split('Tháng ')[1]}")
-        st.markdown(f"**🌾 Đối tượng:** {', '.join(COMMUNE_CROPS.get(sel_commune, []))}")
-
-    st.markdown("---")
-
     crops = COMMUNE_CROPS.get(sel_commune, [])
 
     with st.spinner("📥 Đang tải dữ liệu ERA5 TBNN …"):
@@ -1998,6 +1991,39 @@ def page_ban_tin_xa():
     # Load shapefile toàn tỉnh để làm nền bản đồ vị trí xã
     with st.spinner("⏳ Đang tải shapefile nền …"):
         _, _, gdf_xa = load_shapefiles()
+
+    # ─── Chuẩn bị dữ liệu rủi ro (dùng chung cho hiển thị & export) ───
+    active_decades = []
+    for offset in range(1, 4):
+        m2 = mo + offset
+        y2 = yr + (m2 - 1) // 12
+        m2 = ((m2 - 1) % 12) + 1
+        for d in ["T1", "T2", "T3"]:
+            active_decades.append(f"{d}/{m2}")
+
+    decade_risks = compute_decade_risks(df_decadal)
+    growth_stages_lua = {d: LUA_GROWTH_STAGES.get(d, "") for d in active_decades}
+    growth_stages_rau = {d: RAU_GROWTH_STAGES.get(d, "") for d in active_decades}
+    start_m = month_labels[0].replace("Tháng ", "")
+    end_m   = month_labels[-1].replace("Tháng ", "")
+
+    with col2:
+        st.markdown("**📅 Kỳ dự báo:**")
+        st.info(f"Tháng {month_labels[0].split('Tháng ')[1]} → {month_labels[-1].split('Tháng ')[1]}")
+        sub_label, sub_btn = st.columns([3, 1.4])
+        with sub_label:
+            st.markdown(f"**🌾 Đối tượng:** {', '.join(crops)}")
+        with sub_btn:
+            render_export_button(
+                sel_commune, crops, sel_period, month_labels,
+                df_r, df_t, df_decadal, xacsuat_data, gdf_xa,
+                active_decades, decade_risks,
+                growth_stages_lua, growth_stages_rau,
+                start_m, end_m, yr, mo,
+                button_key="export_bulletin_btn",
+            )
+
+    st.markdown("---")
 
     render_commune_bulletin(
         commune_name=sel_commune,
