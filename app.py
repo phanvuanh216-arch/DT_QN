@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Ứng dụng Streamlit - Hệ thống Bản tin Khí hậu Nông nghiệp Quảng Ninh
-THAY ĐỔI v1.3.5 – MODULE BẢN TIN CẢNH BÁO RỦI RO KHÍ HẬU:
+THAY ĐỔI v1.3.6 – MODULE BẢN TIN CẢNH BÁO RỦI RO KHÍ HẬU:
   [NEW]  Export bản tin ra file HTML (mở tab mới để xem/in/lưu)
   [KEEP] Giữ nguyên toàn bộ code v1.3.4
 """
@@ -1474,12 +1474,13 @@ def build_full_bulletin_html(commune_name, crops, period, month_labels,
     fig_map = build_commune_map_figure(commune_name, gdf_xa)
     fig_clim = build_climate_normal_chart(commune_name, df_r, df_t, forecast_months)
 
-    EXPORT_HEIGHT = 330        # chiều cao chung cho cả 2 figure
-    EXPORT_MAP_WIDTH = 400     # bản đồ xã: fixed width → không bị co khi print
+    EXPORT_HEIGHT    = 300   # chiều cao chung cho cả 2 figure
+    EXPORT_MAP_WIDTH = 260   # bản đồ xã: thu nhỏ để nhường chỗ cho biểu đồ
+    EXPORT_CLM_WIDTH = 680   # biểu đồ TBNN: đủ rộng để hiện đủ 12 tháng
     map_div  = _fig_to_html_div(fig_map,  "export_map_div",
                                 export_height=EXPORT_HEIGHT, export_width=EXPORT_MAP_WIDTH)
     clim_div = _fig_to_html_div(fig_clim, "export_clim_div",
-                                export_height=EXPORT_HEIGHT)
+                                export_height=EXPORT_HEIGHT, export_width=EXPORT_CLM_WIDTH)
 
     if xacsuat_data and any(xacsuat_data.values()):
         xacsuat_html = render_xacsuat_table(xacsuat_data, month_labels)
@@ -1618,8 +1619,8 @@ def build_full_bulletin_html(commune_name, crops, period, month_labels,
     display: flex; gap: 18px; margin-bottom: 22px; flex-wrap: nowrap;
     align-items: flex-start;
   }}
-  /* Bản đồ vị trí xã: fixed 400px, không co giãn → luôn cân xứng khi in */
-  .col-map {{ flex: 0 0 400px; width: 400px; display: flex; flex-direction: column; }}
+  /* Bản đồ vị trí xã: thu nhỏ để biểu đồ TBNN có đủ chỗ hiện 12 tháng */
+  .col-map {{ flex: 0 0 260px; width: 260px; display: flex; flex-direction: column; }}
   /* Biểu đồ TBNN: chiếm phần còn lại */
   .col-chart {{ flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; }}
   .section-title {{
@@ -1633,7 +1634,7 @@ def build_full_bulletin_html(commune_name, crops, period, month_labels,
   .card-chart {{
     border: 1px solid #e2e8f0; border-radius: 8px; padding: 6px;
     background: #fcfdfe;
-    height: 344px;
+    height: 314px;
     overflow: hidden;
     display: flex; align-items: center; justify-content: center;
   }}
@@ -1668,9 +1669,9 @@ def build_full_bulletin_html(commune_name, crops, period, month_labels,
       break-inside: avoid; page-break-inside: avoid;
       display: flex !important; flex-wrap: nowrap !important;
     }}
-    .col-map  {{ flex: 0 0 400px !important; width: 400px !important; }}
+    .col-map  {{ flex: 0 0 260px !important; width: 260px !important; }}
     .col-chart {{ flex: 1 1 0 !important; min-width: 0 !important; }}
-    .card-chart {{ height: 344px !important; overflow: hidden !important; }}
+    .card-chart {{ height: 314px !important; overflow: hidden !important; }}
     .info-row {{ break-inside: avoid; }}
   }}
 </style>
@@ -1725,7 +1726,7 @@ def build_full_bulletin_html(commune_name, crops, period, month_labels,
     </div>
 
     <div class="footer-note">
-      Bản tin được tạo tự động từ hệ thống Bản tin Khí hậu Quảng Ninh — phiên bản 1.3.5
+      Bản tin được tạo tự động từ hệ thống Bản tin Khí hậu Quảng Ninh — phiên bản 1.3.6
     </div>
   </div>
 </body>
@@ -2132,7 +2133,7 @@ with st.sidebar:
     st.markdown("Phòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu")
     st.markdown("Viện Khoa học Khí tượng Thủy văn Môi trường và Biển")
     st.markdown("---")
-    st.markdown("*Phiên bản 1.3.5 – 06/2026*")
+    st.markdown("*Phiên bản 1.3.6 – 06/2026*")
 
 if   menu == "🏠 Tổng quan":                          page_tong_quan()
 elif menu == "🔄 Dự báo khí hậu mùa":                page_du_bao()
