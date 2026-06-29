@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 """
 Ứng dụng Streamlit - Hệ thống Bản tin Khí hậu Nông nghiệp Quảng Ninh
-THAY ĐỔI v1.3.4 – MODULE BẢN TIN CẢNH BÁO RỦI RO KHÍ HẬU:
-  [FIX]  Vị trí xã: tải shapefile riêng từng xã từ thư mục xa_roi/
-  [KEEP] Giữ nguyên toàn bộ code v1.3.3
+THAY ĐỔI v1.3.5 – MODULE BẢN TIN CẢNH BÁO RỦI RO KHÍ HẬU:
+  [NEW]  Export bản tin ra file HTML (mở tab mới để xem/in/lưu)
+  [KEEP] Giữ nguyên toàn bộ code v1.3.4
 """
 
 import streamlit as st
+import streamlit.components.v1 as components
 import numpy as np
 import plotly.graph_objects as go
 from scipy.ndimage import gaussian_filter
@@ -21,6 +22,7 @@ import pandas as pd
 import io
 import os
 import re
+import base64
 import tempfile
 import warnings
 from datetime import datetime
@@ -70,6 +72,10 @@ st.markdown("""
         color: white; padding: 8px 16px; border-radius: 8px;
         font-size: 1.2rem; font-weight: bold; margin: 0 0 8px 0;
         text-align: center;
+    }
+    .export-toolbar {
+        display: flex; justify-content: flex-end; align-items: center;
+        margin: 4px 0 10px 0;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -1393,6 +1399,312 @@ def build_commune_map_figure(commune_name, gdf_xa_all):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# EXPORT BẢN TIN RA HTML (mở tab mới để xem / in / lưu)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _fig_to_html_div(fig, div_id):
+    """Chuyển 1 plotly Figure thành đoạn HTML (div + script) để nhúng vào bản tin export."""
+    if fig is None:
+        return ""
+    try:
+        return fig.to_html(
+            full_html=False,
+            include_plotlyjs=False,
+            div_id=div_id,
+            config={"displayModeBar": False, "responsive": True},
+        )
+    except Exception:
+        return ""
+
+
+def build_full_bulletin_html(commune_name, crops, period, month_labels,
+                              df_r, df_t, df_decadal, xacsuat_data, gdf_xa,
+                              active_decades, decade_risks,
+                              growth_stages_lua, growth_stages_rau,
+                              start_m, end_m, yr, mo):
+    """
+    Gói toàn bộ bản tin của 1 xã (bản đồ vị trí, biểu đồ TBNN, bảng xác suất,
+    các bảng rủi ro theo từng đối tượng) thành 1 trang HTML độc lập, có thể
+    mở trong tab mới để xem / in / lưu.
+    """
+    forecast_months = []
+    for offset in range(1, 4):
+        m2 = mo + offset
+        m2 = ((m2 - 1) % 12) + 1
+        forecast_months.append(m2)
+
+    fig_map = build_commune_map_figure(commune_name, gdf_xa)
+    fig_clim = build_climate_normal_chart(commune_name, df_r, df_t, forecast_months)
+
+    map_div = _fig_to_html_div(fig_map, "export_map_div")
+    clim_div = _fig_to_html_div(fig_clim, "export_clim_div")
+
+    if xacsuat_data and any(xacsuat_data.values()):
+        xacsuat_html = render_xacsuat_table(xacsuat_data, month_labels)
+    else:
+        xacsuat_html = "<p style='color:#888;'>ℹ️ Dữ liệu xác suất chưa có hoặc chưa tải được.</p>"
+
+    # ─── Bảng rủi ro từng đối tượng (tái sử dụng logic giống render_commune_bulletin) ───
+    risk_sections_html = ""
+    emoji_map = {"Lúa": "🌾", "Rau": "🥬", "Lợn": "🐷", "Gà": "🐔"}
+
+    for crop in crops:
+        emoji = emoji_map.get(crop, "🌿")
+
+        if crop == "Lúa":
+            gs = growth_stages_lua
+            diseases = [
+                ("Rầy", {d: min(3, decade_risks.get("Lúa", {}).get(d, 1)+0) for d in active_decades}),
+                ("Sâu cuốn lá", {d: min(3, max(1, 2 if df_decadal is not None and not df_decadal.empty else 1)) for d in active_decades}),
+                ("Đục thân", {d: 1 for d in active_decades}),
+                ("Đạo ôn", {d: min(3, decade_risks.get("Lúa", {}).get(d, 1)) for d in active_decades}),
+                ("Nấm cổ bông", {d: 1 for d in active_decades}),
+                ("Khô vằn", {d: 1 for d in active_decades}),
+                ("Rầy nâu", {d: min(3, decade_risks.get("Lúa", {}).get(d, 1)) for d in active_decades}),
+            ]
+        elif crop == "Rau":
+            gs = growth_stages_rau
+            diseases = [
+                ("Sâu xanh", {d: 1 for d in active_decades}),
+                ("Sâu tơ", {d: 1 for d in active_decades}),
+                ("Rệp", {d: 1 for d in active_decades}),
+                ("Bọ nhảy", {d: 1 for d in active_decades}),
+                ("Bệnh thối gốc", {d: min(3, decade_risks.get("Rau", {}).get(d, 1)) for d in active_decades}),
+                ("Sương mai", {d: min(3, decade_risks.get("Rau", {}).get(d, 1)) for d in active_decades}),
+            ]
+        elif crop == "Lợn":
+            gs = None
+            diseases = [
+                ("Dịch tả lợn Châu Phi", {d: 1 for d in active_decades}),
+                ("Dịch tả lợn cổ điển", {d: 1 for d in active_decades}),
+                ("Viêm phổi dính sườn", {d: 1 for d in active_decades}),
+                ("Suyễn lợn", {d: 1 for d in active_decades}),
+                ("Tai xanh (PRRS)", {d: 1 for d in active_decades}),
+                ("Tiêu chảy do E. coli", {d: min(3, decade_risks.get("Lợn", {}).get(d, 1)) for d in active_decades}),
+                ("Đóng dấu lợn", {d: min(3, decade_risks.get("Lợn", {}).get(d, 1)) for d in active_decades}),
+                ("Lở mồm long móng", {d: 1 for d in active_decades}),
+                ("Tụ huyết trùng lợn", {d: min(3, decade_risks.get("Lợn", {}).get(d, 1)) for d in active_decades}),
+            ]
+        else:  # Gà
+            gs = None
+            diseases = [
+                ("Hen gà", {d: 1 for d in active_decades}),
+                ("Cúm gia cầm độc lực cao", {d: 1 for d in active_decades}),
+                ("Cầu trùng gà", {d: min(3, decade_risks.get("Gà", {}).get(d, 1)) for d in active_decades}),
+                ("Viêm ruột hoại tử", {d: 1 for d in active_decades}),
+                ("Newcastle", {d: 1 for d in active_decades}),
+                ("Tụ huyết trùng gia cầm", {d: min(3, decade_risks.get("Gà", {}).get(d, 1)) for d in active_decades}),
+                ("Ký sinh trùng đường máu", {d: min(3, decade_risks.get("Gà", {}).get(d, 1)) for d in active_decades}),
+                ("Đậu gà", {d: min(3, decade_risks.get("Gà", {}).get(d, 1)) for d in active_decades}),
+            ]
+
+        table_html = render_risk_table(crop, active_decades, decade_risks, gs, diseases)
+
+        risk_sections_html += f"""
+        <div class="risk-block">
+          <div class="risk-header-export">{emoji} Mức độ rủi ro đối với {crop} giai đoạn {start_m} đến {end_m} năm {yr if mo + 3 <= 12 else yr+1}</div>
+          {table_html}
+          <div class="legend-export">
+            <span class="legend-chip" style="background:#c8f7c5;">■ Thấp</span>
+            <span class="legend-chip" style="background:#fff176;">■ Trung bình (TB)</span>
+            <span class="legend-chip" style="background:#ff8a65;">■ Cao</span>
+            <span class="legend-chip" style="background:#f0f0f0;">■ Không áp dụng</span>
+          </div>
+        </div>
+        """
+
+    generated_at = datetime.now().strftime("%H:%M %d/%m/%Y")
+    plotly_cdn = "https://cdn.plot.ly/plotly-2.32.0.min.js"
+
+    html_doc = f"""<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>Bản tin khí hậu – Xã {commune_name} – {start_m} đến {end_m}</title>
+<script src="{plotly_cdn}"></script>
+<style>
+  * {{ box-sizing: border-box; }}
+  body {{
+    font-family: "Segoe UI", Arial, sans-serif;
+    margin: 0; padding: 0;
+    background: #f4f6f8;
+    color: #222;
+  }}
+  .page {{
+    max-width: 1100px;
+    margin: 18px auto 60px auto;
+    background: #fff;
+    box-shadow: 0 2px 14px rgba(0,0,0,0.10);
+    border-radius: 10px;
+    overflow: hidden;
+  }}
+  .doc-header {{
+    background: linear-gradient(135deg, #1e3a5f 0%, #2d6a4f 100%);
+    color: #fff; padding: 22px 28px 18px 28px;
+  }}
+  .doc-header .org {{ font-size: 12.5px; opacity: 0.9; margin: 0 0 4px 0; }}
+  .doc-header h1 {{ margin: 4px 0 6px 0; font-size: 1.5rem; }}
+  .doc-header .meta {{ font-size: 12.5px; opacity: 0.9; }}
+  .toolbar {{
+    display: flex; justify-content: flex-end; gap: 10px;
+    padding: 12px 28px; background: #eef3f6; border-bottom: 1px solid #dbe3e8;
+  }}
+  .btn {{
+    border: none; border-radius: 6px; padding: 9px 18px;
+    font-size: 13.5px; font-weight: 600; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px;
+  }}
+  .btn-print {{ background: #1e3a5f; color: #fff; }}
+  .btn-print:hover {{ background: #16314f; }}
+  .content {{ padding: 24px 28px 10px 28px; }}
+  .info-row {{
+    display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 18px;
+  }}
+  .info-card {{
+    flex: 1; min-width: 180px;
+    background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;
+    padding: 10px 14px;
+  }}
+  .info-card .label {{ font-size: 11.5px; color: #667085; margin-bottom: 2px; }}
+  .info-card .value {{ font-size: 14.5px; font-weight: 700; color: #1e3a5f; }}
+  .two-col {{
+    display: flex; gap: 22px; margin-bottom: 22px; flex-wrap: wrap;
+  }}
+  .col-map {{ flex: 1; min-width: 280px; }}
+  .col-chart {{ flex: 2; min-width: 380px; }}
+  .section-title {{
+    font-size: 1rem; font-weight: 700; color: #1e3a5f;
+    margin: 0 0 10px 0; display: flex; align-items: center; gap: 6px;
+  }}
+  .card {{
+    border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;
+    background: #fcfdfe;
+  }}
+  hr.sep {{ border: none; border-top: 1px solid #e2e8f0; margin: 22px 0; }}
+  .risk-block {{ margin-bottom: 22px; }}
+  .risk-header-export {{
+    background: linear-gradient(135deg, #7b2d00 0%, #c0392b 100%);
+    color: #fff; padding: 8px 16px; border-radius: 6px;
+    font-size: 1rem; font-weight: 700; margin: 0 0 6px 0;
+  }}
+  .legend-export {{ font-size: 11.5px; margin: -4px 0 4px 0; }}
+  .legend-chip {{ padding: 2px 9px; margin-right: 6px; border-radius: 3px; }}
+  table {{ font-family: inherit; }}
+  .footer-note {{
+    font-size: 11.5px; color: #8a93a3; text-align: center;
+    padding: 16px 0 22px 0;
+  }}
+
+  @media print {{
+    body {{ background: #fff; }}
+    .page {{ box-shadow: none; margin: 0; border-radius: 0; max-width: 100%; }}
+    .toolbar {{ display: none !important; }}
+    .risk-block {{ break-inside: avoid; page-break-inside: avoid; }}
+    .two-col {{ break-inside: avoid; }}
+  }}
+</style>
+</head>
+<body>
+  <div class="page">
+    <div class="doc-header">
+      <p class="org">Viện Khoa học Khí tượng Thủy văn Môi trường và Biển — Phòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu</p>
+      <h1>📋 Bản tin cảnh báo rủi ro khí hậu – Xã {commune_name}</h1>
+      <div class="meta">Giai đoạn dự báo: tháng {start_m} đến tháng {end_m} &nbsp;•&nbsp; Kỳ dữ liệu: {period[:4]}/{period[4:]} &nbsp;•&nbsp; Xuất lúc: {generated_at}</div>
+    </div>
+
+    <div class="toolbar">
+      <button class="btn btn-print" onclick="window.print()">🖨️ In / Lưu PDF</button>
+    </div>
+
+    <div class="content">
+
+      <div class="info-row">
+        <div class="info-card">
+          <div class="label">🏘️ Xã</div>
+          <div class="value">{commune_name}</div>
+        </div>
+        <div class="info-card">
+          <div class="label">🌱 Đối tượng nông nghiệp</div>
+          <div class="value">{", ".join(crops) if crops else "—"}</div>
+        </div>
+        <div class="info-card">
+          <div class="label">📅 Kỳ dự báo</div>
+          <div class="value">{month_labels[0]} → {month_labels[-1]}</div>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="col-map">
+          <div class="section-title">📍 Vị trí xã</div>
+          <div class="card">{map_div if map_div else "<p style='color:#888;'>Không có dữ liệu bản đồ.</p>"}</div>
+        </div>
+        <div class="col-chart">
+          <div class="section-title">📈 Đặc trưng khí hậu TBNN (1981–2024)</div>
+          <div class="card">{clim_div if clim_div else "<p style='color:#888;'>Không có dữ liệu biểu đồ.</p>"}</div>
+        </div>
+      </div>
+
+      <div class="section-title">📊 Dự báo khí hậu xác suất</div>
+      <div class="card" style="overflow-x:auto;">{xacsuat_html}</div>
+
+      <hr class="sep">
+
+      {risk_sections_html}
+
+    </div>
+
+    <div class="footer-note">
+      Bản tin được tạo tự động từ hệ thống Bản tin Khí hậu Quảng Ninh — phiên bản 1.3.5
+    </div>
+  </div>
+</body>
+</html>"""
+    return html_doc
+
+
+def render_export_button(commune_name, crops, period, month_labels,
+                          df_r, df_t, df_decadal, xacsuat_data, gdf_xa,
+                          active_decades, decade_risks,
+                          growth_stages_lua, growth_stages_rau,
+                          start_m, end_m, yr, mo, button_key):
+    """
+    Vẽ nút 'Export bản tin' sát lề phải. Khi bấm, build toàn bộ HTML bản tin
+    và mở trong tab mới của trình duyệt (qua Blob URL, không giới hạn dung lượng
+    như data URI thông thường).
+    """
+    if st.button("📤 Export bản tin", key=button_key, type="primary", use_container_width=False):
+        with st.spinner("📄 Đang tạo bản tin HTML …"):
+            html_doc = build_full_bulletin_html(
+                commune_name, crops, period, month_labels,
+                df_r, df_t, df_decadal, xacsuat_data, gdf_xa,
+                active_decades, decade_risks,
+                growth_stages_lua, growth_stages_rau,
+                start_m, end_m, yr, mo,
+            )
+        b64 = base64.b64encode(html_doc.encode("utf-8")).decode("ascii")
+        components.html(
+            f"""
+            <script>
+            (function() {{
+                const b64 = "{b64}";
+                const byteChars = atob(b64);
+                const byteNumbers = new Array(byteChars.length);
+                for (let i = 0; i < byteChars.length; i++) {{
+                    byteNumbers[i] = byteChars.charCodeAt(i);
+                }}
+                const byteArray = new Uint8Array(byteNumbers);
+                const blob = new Blob([byteArray], {{type: 'text/html;charset=utf-8'}});
+                const url = URL.createObjectURL(blob);
+                window.open(url, '_blank');
+            }})();
+            </script>
+            """,
+            height=0,
+        )
+        st.success("✅ Đã mở bản tin trong tab mới. Nếu trình duyệt chặn pop-up, vui lòng cho phép pop-up cho trang này rồi bấm lại.")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # RENDER BẢN TIN XÃ
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -1466,6 +1778,22 @@ def render_commune_bulletin(commune_name, crops, period, month_labels,
         st.dataframe(pd.DataFrame(tbl_data), use_container_width=True, hide_index=True)
 
     st.markdown("---")
+
+    # ─── Thanh công cụ: nút Export bản tin sát lề phải, ngang dòng với mục đối tượng cây trồng ───
+    col_label, col_spacer, col_btn = st.columns([3, 4, 1.4])
+    with col_label:
+        st.markdown(
+            f"**🌱 Đối tượng nông nghiệp:** {', '.join(crops) if crops else '—'}"
+        )
+    with col_btn:
+        render_export_button(
+            commune_name, crops, period, month_labels,
+            df_r, df_t, df_decadal, xacsuat_data, gdf_xa,
+            active_decades, decade_risks,
+            growth_stages_lua, growth_stages_rau,
+            start_m, end_m, yr, mo,
+            button_key="export_bulletin_btn",
+        )
 
     # ─── Risk tables per crop ───
     for crop in crops:
@@ -1718,7 +2046,7 @@ with st.sidebar:
     st.markdown("Phòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu")
     st.markdown("Viện Khoa học Khí tượng Thủy văn Môi trường và Biển")
     st.markdown("---")
-    st.markdown("*Phiên bản 1.3.4 – 06/2026*")
+    st.markdown("*Phiên bản 1.3.5 – 06/2026*")
 
 if   menu == "🏠 Tổng quan":                          page_tong_quan()
 elif menu == "🔄 Dự báo khí hậu mùa":                page_du_bao()
