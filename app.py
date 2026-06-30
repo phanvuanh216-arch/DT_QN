@@ -3,7 +3,8 @@
 Ứng dụng Streamlit - Hệ thống Bản tin Khí hậu Nông nghiệp Quảng Ninh
 THAY ĐỔI v1.3.6 – MODULE BẢN TIN CẢNH BÁO RỦI RO KHÍ HẬU:
   [NEW]  Export bản tin ra file HTML (mở tab mới để xem/in/lưu)
-  [KEEP] Giữ nguyên toàn bộ code v1.3.4
+  [NEW]  Cập nhật đầy đủ sinh thái mùa vụ 12 tháng (36 thập) cho Lúa, Rau, Lợn, Gà
+  [KEEP] Giữ nguyên toàn bộ code cấu trúc giao diện v1.3.4
 """
 
 import streamlit as st
@@ -183,38 +184,56 @@ COMMUNE_COL_MAP = {
     "Hoàng Quế":  "hoangque",
 }
 
-# Lúa - chu kỳ sinh trưởng theo từng thập (T1,T2,T3) của tháng 6,7,8
+# ══════════════════════════════════════════════════════════════════════════════
+# ĐỘNG LỰC HỌC MÙA VỤ 12 THÁNG (36 THẬP)
+# ══════════════════════════════════════════════════════════════════════════════
+# Mở rộng toàn bộ 12 tháng (kết hợp Vụ Đông Xuân, Vụ Mùa, Đất trống/Nghỉ)
 LUA_GROWTH_STAGES = {
-    "T1/6": "Gieo, nảy mầm",
-    "T2/6": "Gieo, nảy mầm",
-    "T3/6": "Mạ",
-    "T1/7": "Mạ",
-    "T2/7": "Đẻ nhánh",
-    "T3/7": "Đẻ nhánh",
-    "T1/8": "Làm đòng",
-    "T2/8": "Phân hóa hoa",
-    "T3/8": "Trỗ – thụ phấn",
+    "T1/1": "Gieo, nảy mầm", "T2/1": "Mạ", "T3/1": "Mạ",
+    "T1/2": "Đẻ nhánh", "T2/2": "Đẻ nhánh", "T3/2": "Đẻ nhánh",
+    "T1/3": "Làm đòng", "T2/3": "Làm đòng", "T3/3": "Phân hóa hoa",
+    "T1/4": "Trỗ – thụ phấn", "T2/4": "Chắc hạt", "T3/4": "Chắc hạt",
+    "T1/5": "Chín, thu hoạch", "T2/5": "Chín, thu hoạch", "T3/5": "Nghỉ",
+    "T1/6": "Gieo, nảy mầm", "T2/6": "Gieo, nảy mầm", "T3/6": "Mạ",
+    "T1/7": "Mạ", "T2/7": "Đẻ nhánh", "T3/7": "Đẻ nhánh",
+    "T1/8": "Làm đòng", "T2/8": "Phân hóa hoa", "T3/8": "Trỗ – thụ phấn",
+    "T1/9": "Chắc hạt", "T2/9": "Chắc hạt", "T3/9": "Chín, thu hoạch",
+    "T1/10": "Nghỉ", "T2/10": "Nghỉ", "T3/10": "Nghỉ",
+    "T1/11": "Nghỉ", "T2/11": "Nghỉ", "T3/11": "Gieo, nảy mầm",
+    "T1/12": "Gieo, nảy mầm", "T2/12": "Gieo, nảy mầm", "T3/12": "Gieo, nảy mầm",
 }
 
+# Rau vụ Đông Xuân, Xuân Hè, Hè Thu
 RAU_GROWTH_STAGES = {
-    "T1/6": "Thân lá (Bí xanh)",
-    "T2/6": "Ra hoa (Bí xanh)",
-    "T3/6": "Ra hoa – Đậu quả (Dưa chuột)",
-    "T1/7": "Nảy mầm (Dưa chuột)",
-    "T2/7": "Cây con (Dưa chuột)",
-    "T3/7": "Sinh trưởng thân lá",
-    "T1/8": "Ra hoa – Đậu quả",
-    "T2/8": "Ra hoa – Đậu quả",
-    "T3/8": "Thu hoạch",
+    "T1/1": "Cây con", "T2/1": "Sinh trưởng thân lá", "T3/1": "Sinh trưởng thân lá",
+    "T1/2": "Ra hoa – Đậu quả", "T2/2": "Ra hoa – Đậu quả", "T3/2": "Ra hoa – Đậu quả",
+    "T1/3": "Phát triển quả", "T2/3": "Phát triển quả", "T3/3": "Thu hoạch",
+    "T1/4": "Thu hoạch", "T2/4": "Đất trống", "T3/4": "Gieo, nảy mầm",
+    "T1/5": "Cây con", "T2/5": "Sinh trưởng thân lá", "T3/5": "Ra hoa – Đậu quả",
+    "T1/6": "Sinh trưởng thân lá", "T2/6": "Ra hoa – Đậu quả", "T3/6": "Ra hoa – Đậu quả",
+    "T1/7": "Nảy mầm (Dưa chuột)", "T2/7": "Cây con (Dưa chuột)", "T3/7": "Sinh trưởng thân lá",
+    "T1/8": "Ra hoa – Đậu quả", "T2/8": "Ra hoa – Đậu quả", "T3/8": "Thu hoạch",
+    "T1/9": "Thu hoạch", "T2/9": "Làm đất", "T3/9": "Gieo, nảy mầm (Rau vụ Đông)",
+    "T1/10": "Nảy mầm", "T2/10": "Cây con", "T3/10": "Trải lá",
+    "T1/11": "Sinh trưởng thân lá", "T2/11": "Cuốn bắp/Tạo nụ", "T3/11": "Cuốn bắp/Tạo nụ",
+    "T1/12": "Thu hoạch", "T2/12": "Thu hoạch", "T3/12": "Gieo, nảy mầm",
 }
 
+# Vật nuôi phát triển liên tục quanh năm
+LON_GROWTH_STAGES = {f"T{d}/{m}": "Sinh trưởng & Vỗ béo" for m in range(1, 13) for d in range(1, 4)}
+GA_GROWTH_STAGES = {f"T{d}/{m}": "Sinh trưởng & Đẻ trứng" for m in range(1, 13) for d in range(1, 4)}
+
+# Ngưỡng nhiệt rủi ro mở rộng cho lúa
 LUA_TEMP_RISK = {
     "Gieo, nảy mầm": (10, 45),
-    "Mạ":             (12, 35),
-    "Đẻ nhánh":       (9,  33),
-    "Làm đòng":       (15, 38),
-    "Phân hóa hoa":   (15, 38),
+    "Mạ":            (12, 35),
+    "Đẻ nhánh":      (9,  33),
+    "Làm đòng":      (15, 38),
+    "Phân hóa hoa":  (15, 38),
     "Trỗ – thụ phấn": (22, 38),
+    "Chắc hạt":      (12, 35),
+    "Chín, thu hoạch": (12, 35),
+    "Nghỉ":          (0, 99),  # Không có rủi ro nhiệt khi nghỉ
 }
 
 PIG_THI_RISK = {"normal": 74, "warn": 78, "danger": 83, "critical": 84}
@@ -222,8 +241,6 @@ CHICKEN_THI_RISK = {"normal": 70, "warn": 75, "danger": 81, "critical": 81}
 
 RISK_LABELS = {0: "—", 1: "Thấp", 2: "Trung bình", 3: "Cao"}
 RISK_COLORS = {0: "#f0f0f0", 1: "#c8f7c5", 2: "#fff176", 3: "#ff8a65"}
-
-DECADAL_LABELS = ["T1/6","T2/6","T3/6","T1/7","T2/7","T3/7","T1/8","T2/8","T3/8"]
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -815,6 +832,11 @@ def temp_to_risk_lua(T, stage):
     if T is None or stage not in LUA_TEMP_RISK:
         return 0
     cold_thresh, hot_thresh = LUA_TEMP_RISK[stage]
+    
+    # Bỏ qua nếu là giai đoạn nghỉ vụ
+    if hot_thresh == 99:
+        return 0
+
     if T < cold_thresh:
         return 3
     if T >= hot_thresh:
@@ -850,18 +872,21 @@ def compute_decade_risks(df_decadal):
 
         stage = LUA_GROWTH_STAGES.get(decade, "")
         t_risk = temp_to_risk_lua(T, stage) if stage else 0
-        r_risk = rain_to_risk(R)
+        r_risk = rain_to_risk(R) if stage and stage != "Nghỉ" else 0
         risks["Lúa"][decade] = max(t_risk, r_risk)
 
+        # Rau: Áp dụng rủi ro khi không trong giai đoạn "Đất trống" hoặc "Làm đất"
+        stage_rau = RAU_GROWTH_STAGES.get(decade, "")
         t_risk_rau = 0
-        if T is not None:
+        if T is not None and stage_rau not in ["Đất trống", "Làm đất"]:
             if T > 38 or T < 10:
                 t_risk_rau = 3
             elif T > 35 or T < 15:
                 t_risk_rau = 2
             else:
                 t_risk_rau = 1
-        risks["Rau"][decade] = max(t_risk_rau, rain_to_risk(R))
+        r_risk_rau = rain_to_risk(R) if stage_rau not in ["Đất trống", "Làm đất"] else 0
+        risks["Rau"][decade] = max(t_risk_rau, r_risk_rau)
 
         thi = compute_pig_thi(T, RH if RH else 75)
         risks["Lợn"][decade] = thi_to_risk_pig(thi)
@@ -1403,21 +1428,11 @@ def build_commune_map_figure(commune_name, gdf_xa_all):
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _fig_to_html_div(fig, div_id, export_height=None, export_width=None):
-    """
-    Chuyển 1 plotly Figure thành đoạn HTML (div + script) để nhúng vào bản tin export.
-
-    - export_height / export_width: set kích thước cố định (px) trước khi xuất.
-      Khi truyền export_width, dùng autosize=False để Plotly giữ nguyên kích thước
-      khi trình duyệt print — tránh bản đồ bị co/méo so với biểu đồ bên cạnh.
-    - Script vẽ (Plotly.newPlot) được bọc trong logic polling, chỉ chạy SAU KHI
-      thư viện Plotly (tải từ CDN) đã sẵn sàng — tránh tình trạng div trống do
-      script chạy trước khi window.Plotly được định nghĩa.
-    """
     if fig is None:
         return ""
     try:
         if export_height or export_width:
-            fig = go.Figure(fig)  # clone để không ảnh hưởng figure dùng hiển thị trong app
+            fig = go.Figure(fig)  
             layout_update = {}
             if export_height:
                 layout_update["height"] = export_height
@@ -1459,12 +1474,8 @@ def build_full_bulletin_html(commune_name, crops, period, month_labels,
                               df_r, df_t, df_decadal, xacsuat_data, gdf_xa,
                               active_decades, decade_risks,
                               growth_stages_lua, growth_stages_rau,
+                              growth_stages_lon, growth_stages_ga,
                               start_m, end_m, yr, mo):
-    """
-    Gói toàn bộ bản tin của 1 xã (bản đồ vị trí, biểu đồ TBNN, bảng xác suất,
-    các bảng rủi ro theo từng đối tượng) thành 1 trang HTML độc lập, có thể
-    mở trong tab mới để xem / in / lưu.
-    """
     forecast_months = []
     for offset in range(1, 4):
         m2 = mo + offset
@@ -1474,9 +1485,9 @@ def build_full_bulletin_html(commune_name, crops, period, month_labels,
     fig_map = build_commune_map_figure(commune_name, gdf_xa)
     fig_clim = build_climate_normal_chart(commune_name, df_r, df_t, forecast_months)
 
-    EXPORT_HEIGHT    = 300   # chiều cao chung cho cả 2 figure
-    EXPORT_MAP_WIDTH = 260   # bản đồ xã: thu nhỏ để nhường chỗ cho biểu đồ
-    EXPORT_CLM_WIDTH = 680   # biểu đồ TBNN: đủ rộng để hiện đủ 12 tháng
+    EXPORT_HEIGHT    = 300   
+    EXPORT_MAP_WIDTH = 260   
+    EXPORT_CLM_WIDTH = 680   
     map_div  = _fig_to_html_div(fig_map,  "export_map_div",
                                 export_height=EXPORT_HEIGHT, export_width=EXPORT_MAP_WIDTH)
     clim_div = _fig_to_html_div(fig_clim, "export_clim_div",
@@ -1487,7 +1498,7 @@ def build_full_bulletin_html(commune_name, crops, period, month_labels,
     else:
         xacsuat_html = "<p style='color:#888;'>ℹ️ Dữ liệu xác suất chưa có hoặc chưa tải được.</p>"
 
-    # ─── Bảng rủi ro từng đối tượng (tái sử dụng logic giống render_commune_bulletin) ───
+    # ─── Bảng rủi ro từng đối tượng ───
     risk_sections_html = ""
     emoji_map = {"Lúa": "🌾", "Rau": "🥬", "Lợn": "🐷", "Gà": "🐔"}
 
@@ -1516,7 +1527,7 @@ def build_full_bulletin_html(commune_name, crops, period, month_labels,
                 ("Sương mai", {d: min(3, decade_risks.get("Rau", {}).get(d, 1)) for d in active_decades}),
             ]
         elif crop == "Lợn":
-            gs = None
+            gs = growth_stages_lon
             diseases = [
                 ("Dịch tả lợn Châu Phi", {d: 1 for d in active_decades}),
                 ("Dịch tả lợn cổ điển", {d: 1 for d in active_decades}),
@@ -1529,7 +1540,7 @@ def build_full_bulletin_html(commune_name, crops, period, month_labels,
                 ("Tụ huyết trùng lợn", {d: min(3, decade_risks.get("Lợn", {}).get(d, 1)) for d in active_decades}),
             ]
         else:  # Gà
-            gs = None
+            gs = growth_stages_ga
             diseases = [
                 ("Hen gà", {d: 1 for d in active_decades}),
                 ("Cúm gia cầm độc lực cao", {d: 1 for d in active_decades}),
@@ -1619,9 +1630,7 @@ def build_full_bulletin_html(commune_name, crops, period, month_labels,
     display: flex; gap: 18px; margin-bottom: 22px; flex-wrap: nowrap;
     align-items: flex-start;
   }}
-  /* Bản đồ vị trí xã: thu nhỏ để biểu đồ TBNN có đủ chỗ hiện 12 tháng */
   .col-map {{ flex: 0 0 260px; width: 260px; display: flex; flex-direction: column; }}
-  /* Biểu đồ TBNN: chiếm phần còn lại */
   .col-chart {{ flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; }}
   .section-title {{
     font-size: 1rem; font-weight: 700; color: #1e3a5f;
@@ -1664,7 +1673,6 @@ def build_full_bulletin_html(commune_name, crops, period, month_labels,
     .page {{ box-shadow: none; margin: 0; border-radius: 0; max-width: 100%; }}
     .toolbar {{ display: none !important; }}
     .risk-block {{ break-inside: avoid; page-break-inside: avoid; }}
-    /* Giữ 2 cột nằm ngang, không wrap, kích thước cố định khi in */
     .two-col {{
       break-inside: avoid; page-break-inside: avoid;
       display: flex !important; flex-wrap: nowrap !important;
@@ -1738,12 +1746,8 @@ def render_export_button(commune_name, crops, period, month_labels,
                           df_r, df_t, df_decadal, xacsuat_data, gdf_xa,
                           active_decades, decade_risks,
                           growth_stages_lua, growth_stages_rau,
+                          growth_stages_lon, growth_stages_ga,
                           start_m, end_m, yr, mo, button_key):
-    """
-    Vẽ nút 'Export bản tin' sát lề phải. Khi bấm, build toàn bộ HTML bản tin
-    và mở trong tab mới của trình duyệt (qua Blob URL, không giới hạn dung lượng
-    như data URI thông thường).
-    """
     if st.button("📤 Export bản tin", key=button_key, type="primary", use_container_width=False):
         with st.spinner("📄 Đang tạo bản tin HTML …"):
             html_doc = build_full_bulletin_html(
@@ -1751,6 +1755,7 @@ def render_export_button(commune_name, crops, period, month_labels,
                 df_r, df_t, df_decadal, xacsuat_data, gdf_xa,
                 active_decades, decade_risks,
                 growth_stages_lua, growth_stages_rau,
+                growth_stages_lon, growth_stages_ga,
                 start_m, end_m, yr, mo,
             )
         b64 = base64.b64encode(html_doc.encode("utf-8")).decode("ascii")
@@ -1801,6 +1806,8 @@ def render_commune_bulletin(commune_name, crops, period, month_labels,
     decade_risks = compute_decade_risks(df_decadal)
     growth_stages_lua = {d: LUA_GROWTH_STAGES.get(d, "") for d in active_decades}
     growth_stages_rau = {d: RAU_GROWTH_STAGES.get(d, "") for d in active_decades}
+    growth_stages_lon = {d: LON_GROWTH_STAGES.get(d, "") for d in active_decades}
+    growth_stages_ga  = {d: GA_GROWTH_STAGES.get(d, "") for d in active_decades}
 
     start_m = month_labels[0].replace("Tháng ", "")
     end_m   = month_labels[-1].replace("Tháng ", "")
@@ -1851,7 +1858,7 @@ def render_commune_bulletin(commune_name, crops, period, month_labels,
 
     st.markdown("---")
 
-    # ─── Đối tượng nông nghiệp (nút Export đã chuyển lên đầu trang) ───
+    # ─── Đối tượng nông nghiệp ───
     st.markdown(
         f"**🌱 Đối tượng nông nghiệp:** {', '.join(crops) if crops else '—'}"
     )
@@ -1887,7 +1894,7 @@ def render_commune_bulletin(commune_name, crops, period, month_labels,
                 ("Sương mai", {d: min(3, decade_risks.get("Rau", {}).get(d, 1)) for d in active_decades}),
             ]
         elif crop == "Lợn":
-            gs = None
+            gs = growth_stages_lon
             diseases = [
                 ("Dịch tả lợn Châu Phi", {d: 1 for d in active_decades}),
                 ("Dịch tả lợn cổ điển", {d: 1 for d in active_decades}),
@@ -1900,7 +1907,7 @@ def render_commune_bulletin(commune_name, crops, period, month_labels,
                 ("Tụ huyết trùng lợn", {d: min(3, decade_risks.get("Lợn", {}).get(d, 1)) for d in active_decades}),
             ]
         else:  # Gà
-            gs = None
+            gs = growth_stages_ga
             diseases = [
                 ("Hen gà", {d: 1 for d in active_decades}),
                 ("Cúm gia cầm độc lực cao", {d: 1 for d in active_decades}),
@@ -2065,6 +2072,9 @@ def page_ban_tin_xa():
     decade_risks = compute_decade_risks(df_decadal)
     growth_stages_lua = {d: LUA_GROWTH_STAGES.get(d, "") for d in active_decades}
     growth_stages_rau = {d: RAU_GROWTH_STAGES.get(d, "") for d in active_decades}
+    growth_stages_lon = {d: LON_GROWTH_STAGES.get(d, "") for d in active_decades}
+    growth_stages_ga  = {d: GA_GROWTH_STAGES.get(d, "") for d in active_decades}
+    
     start_m = month_labels[0].replace("Tháng ", "")
     end_m   = month_labels[-1].replace("Tháng ", "")
 
@@ -2080,6 +2090,7 @@ def page_ban_tin_xa():
                 df_r, df_t, df_decadal, xacsuat_data, gdf_xa,
                 active_decades, decade_risks,
                 growth_stages_lua, growth_stages_rau,
+                growth_stages_lon, growth_stages_ga,
                 start_m, end_m, yr, mo,
                 button_key="export_bulletin_btn",
             )
@@ -2135,9 +2146,9 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("*Phiên bản 1.3.6 – 06/2026*")
 
-if   menu == "🏠 Tổng quan":                          page_tong_quan()
+if   menu == "🏠 Tổng quan":                        page_tong_quan()
 elif menu == "🔄 Dự báo khí hậu mùa":                page_du_bao()
 elif menu == "📋 Bản tin cảnh báo rủi ro khí hậu":   page_ban_tin_xa()
-elif menu == "💾 Bản tin đã lưu":                     page_ban_tin_da_luu()
+elif menu == "💾 Bản tin đã lưu":                      page_ban_tin_da_luu()
 elif menu == "📤 Export bản tin":                      page_export()
 elif menu == "💬 Phản hồi":                            page_phan_hoi()
