@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """
 Ứng dụng Streamlit - Hệ thống Bản tin Khí hậu Nông nghiệp Quảng Ninh
-THAY ĐỔI v1.3.6 – MODULE BẢN TIN CẢNH BÁO RỦI RO KHÍ HẬU:
+THAY ĐỔI v1.3.7 – MODULE BẢN TIN CẢNH BÁO RỦI RO KHÍ HẬU:
   [NEW]  Export bản tin ra file HTML (mở tab mới để xem/in/lưu)
-  [NEW]  Tách biệt chi tiết Bắp cải, Súp lơ, Dưa chuột, Bí xanh thay cho "Rau" chung
-  [KEEP] Giữ nguyên toàn bộ cấu trúc và định dạng giao diện nguyên bản
+  [NEW]  Cập nhật đầy đủ sinh thái mùa vụ 12 tháng (36 thập) cho Lúa, Rau, Lợn, Gà
+  [KEEP] Giữ nguyên toàn bộ code cấu trúc giao diện v1.3.4
 """
 
 import streamlit as st
@@ -116,38 +116,38 @@ EXTREME_VARS = {
     "ano.Evap":   {"label": "Bốc hơi (Evap)",                 "unit": "mm",   "cmap": "BrBG",     "levels": [-100,-50,-25,-10,0,10,25,50,100]},
 }
 
-# Tách riêng các đối tượng rau cụ thể cho từng xã
+# Danh sách xã và đối tượng nông nghiệp
 COMMUNE_CROPS = {
     "Hải Sơn":    ["Lợn"],
     "Hải Ninh":   ["Lợn"],
     "Móng Cái 1": ["Lợn"],
     "Móng Cái 2": ["Lợn"],
     "Móng Cái 3": ["Lợn"],
-    "Quảng Hà":   ["Lúa", "Bắp cải", "Dưa chuột", "Lợn", "Gà"],
-    "Đường Hoa":  ["Lúa", "Súp lơ", "Bí xanh", "Lợn", "Gà"],
-    "Quảng Đức":  ["Lúa", "Bắp cải", "Bí xanh", "Lợn", "Gà"],
-    "Cái Chiên":  ["Lúa", "Dưa chuột", "Lợn", "Gà"],
-    "Quảng Tân":  ["Lúa", "Súp lơ", "Bắp cải", "Lợn", "Gà"],
-    "Đầm Hà":     ["Lúa", "Bí xanh", "Dưa chuột", "Lợn", "Gà"],
-    "Hải Hòa":    ["Bắp cải", "Dưa chuột", "Gà"],
-    "Tiên Yên":   ["Súp lơ", "Bí xanh", "Gà"],
-    "Điền Xá":    ["Bắp cải", "Dưa chuột", "Gà"],
-    "Đông Ngũ":   ["Súp lơ", "Bí xanh", "Gà"],
-    "Hải Lạng":   ["Bắp cải", "Súp lơ", "Gà"],
-    "Đông Mai":   ["Lúa", "Dưa chuột", "Bí xanh", "Lợn", "Gà"],
-    "Hiệp Hòa":   ["Lúa", "Bắp cải", "Súp lơ", "Lợn", "Gà"],
-    "Quang Yên":  ["Lúa", "Dưa chuột", "Bí xanh", "Lợn", "Gà"],
-    "Hà An":      ["Lúa", "Bắp cải", "Súp lơ", "Lợn", "Gà"],
-    "Phong Cốc":  ["Lúa", "Dưa chuột", "Bí xanh", "Lợn", "Gà"],
-    "Liên Hòa":   ["Lúa", "Bắp cải", "Súp lơ", "Lợn", "Gà"],
-    "Yên Tử":     ["Bắp cải", "Bí xanh", "Lợn", "Gà"],
-    "Vàng Danh":  ["Súp lơ", "Dưa chuột", "Lợn", "Gà"],
-    "Uông Bí":    ["Bắp cải", "Súp lơ", "Lợn", "Gà"],
-    "An Sinh":    ["Lúa", "Dưa chuột", "Bí xanh", "Lợn", "Gà"],
-    "Đông Triều": ["Lúa", "Bắp cải", "Súp lơ", "Lợn", "Gà"],
-    "Bình Khuê":  ["Lúa", "Dưa chuột", "Bí xanh", "Lợn", "Gà"],
-    "Mạo Khê":    ["Lúa", "Bắp cải", "Súp lơ", "Lợn", "Gà"],
-    "Hoàng Quế":  ["Lúa", "Dưa chuột", "Bí xanh", "Lợn", "Gà"],
+    "Quảng Hà":   ["Lúa", "Rau", "Lợn", "Gà"],
+    "Đường Hoa":  ["Lúa", "Rau", "Lợn", "Gà"],
+    "Quảng Đức":  ["Lúa", "Rau", "Lợn", "Gà"],
+    "Cái Chiên":  ["Lúa", "Rau", "Lợn", "Gà"],
+    "Quảng Tân":  ["Lúa", "Rau", "Lợn", "Gà"],
+    "Đầm Hà":     ["Lúa", "Rau", "Lợn", "Gà"],
+    "Hải Hòa":    ["Rau", "Gà"],
+    "Tiên Yên":   ["Rau", "Gà"],
+    "Điền Xá":    ["Rau", "Gà"],
+    "Đông Ngũ":   ["Rau", "Gà"],
+    "Hải Lạng":   ["Rau", "Gà"],
+    "Đông Mai":   ["Lúa", "Rau", "Lợn", "Gà"],
+    "Hiệp Hòa":   ["Lúa", "Rau", "Lợn", "Gà"],
+    "Quang Yên":  ["Lúa", "Rau", "Lợn", "Gà"],
+    "Hà An":      ["Lúa", "Rau", "Lợn", "Gà"],
+    "Phong Cốc":  ["Lúa", "Rau", "Lợn", "Gà"],
+    "Liên Hòa":   ["Lúa", "Rau", "Lợn", "Gà"],
+    "Yên Tử":     ["Rau", "Lợn", "Gà"],
+    "Vàng Danh":  ["Rau", "Lợn", "Gà"],
+    "Uông Bí":    ["Rau", "Lợn", "Gà"],
+    "An Sinh":    ["Lúa", "Rau", "Lợn", "Gà"],
+    "Đông Triều": ["Lúa", "Rau", "Lợn", "Gà"],
+    "Bình Khuê":  ["Lúa", "Rau", "Lợn", "Gà"],
+    "Mạo Khê":    ["Lúa", "Rau", "Lợn", "Gà"],
+    "Hoàng Quế":  ["Lúa", "Rau", "Lợn", "Gà"],
 }
 
 # Map commune name → column key in ERA5 files and shapefile basename in xa_roi/
@@ -185,9 +185,9 @@ COMMUNE_COL_MAP = {
 }
 
 # ══════════════════════════════════════════════════════════════════════════════
-# ĐỘNG LỰC HỌC MÙA VỤ 12 THÁNG (TÁCH BIỆT TỪNG ĐỐI TƯỢNG)
+# ĐỘNG LỰC HỌC MÙA VỤ 12 THÁNG (36 THẬP)
 # ══════════════════════════════════════════════════════════════════════════════
-
+# Mở rộng toàn bộ 12 tháng (kết hợp Vụ Đông Xuân, Vụ Mùa, Đất trống/Nghỉ)
 LUA_GROWTH_STAGES = {
     "T1/1": "Gieo, nảy mầm", "T2/1": "Mạ", "T3/1": "Mạ",
     "T1/2": "Đẻ nhánh", "T2/2": "Đẻ nhánh", "T3/2": "Đẻ nhánh",
@@ -203,49 +203,27 @@ LUA_GROWTH_STAGES = {
     "T1/12": "Gieo, nảy mầm", "T2/12": "Gieo, nảy mầm", "T3/12": "Gieo, nảy mầm",
 }
 
-BAPCAI_GROWTH_STAGES = {f"T{d}/{m}": "Nghỉ" for m in range(1, 13) for d in range(1, 4)}
-BAPCAI_GROWTH_STAGES.update({
-    "T1/9": "Gieo, nảy mầm", "T2/9": "Cây con", "T3/9": "Cây có 1-2 lá thật",
-    "T1/10": "Trải lá", "T2/10": "Cuốn bắp", "T3/10": "Cuốn bắp",
-    "T1/11": "Chắc bắp", "T2/11": "Thu hoạch sớm", "T3/11": "Thu hoạch",
-    "T1/12": "Gieo đợt 2", "T2/12": "Cây con đợt 2", "T3/12": "Trải lá",
-    "T1/1": "Cuốn bắp", "T2/1": "Thu hoạch", "T3/1": "Thu hoạch",
-})
+# Rau vụ Đông Xuân, Xuân Hè, Hè Thu
+RAU_GROWTH_STAGES = {
+    "T1/1": "Cây con", "T2/1": "Sinh trưởng thân lá", "T3/1": "Sinh trưởng thân lá",
+    "T1/2": "Ra hoa – Đậu quả", "T2/2": "Ra hoa – Đậu quả", "T3/2": "Ra hoa – Đậu quả",
+    "T1/3": "Phát triển quả", "T2/3": "Phát triển quả", "T3/3": "Thu hoạch",
+    "T1/4": "Thu hoạch", "T2/4": "Đất trống", "T3/4": "Gieo, nảy mầm",
+    "T1/5": "Cây con", "T2/5": "Sinh trưởng thân lá", "T3/5": "Ra hoa – Đậu quả",
+    "T1/6": "Sinh trưởng thân lá", "T2/6": "Ra hoa – Đậu quả", "T3/6": "Ra hoa – Đậu quả",
+    "T1/7": "Nảy mầm (Dưa chuột)", "T2/7": "Cây con (Dưa chuột)", "T3/7": "Sinh trưởng thân lá",
+    "T1/8": "Ra hoa – Đậu quả", "T2/8": "Ra hoa – Đậu quả", "T3/8": "Thu hoạch",
+    "T1/9": "Thu hoạch", "T2/9": "Làm đất", "T3/9": "Gieo, nảy mầm (Rau vụ Đông)",
+    "T1/10": "Nảy mầm", "T2/10": "Cây con", "T3/10": "Trải lá",
+    "T1/11": "Sinh trưởng thân lá", "T2/11": "Cuốn bắp/Tạo nụ", "T3/11": "Cuốn bắp/Tạo nụ",
+    "T1/12": "Thu hoạch", "T2/12": "Thu hoạch", "T3/12": "Gieo, nảy mầm",
+}
 
-SUPLO_GROWTH_STAGES = {f"T{d}/{m}": "Nghỉ" for m in range(1, 13) for d in range(1, 4)}
-SUPLO_GROWTH_STAGES.update({
-    "T1/9": "Gieo, nảy mầm", "T2/9": "Cây con", "T3/9": "Cây con",
-    "T1/10": "Phân hóa mầm hoa", "T2/10": "Hình thành nụ hoa", "T3/10": "Phát triển nụ hoa",
-    "T1/11": "Phát triển nụ hoa", "T2/11": "Thu hoạch sớm", "T3/11": "Thu hoạch",
-    "T1/12": "Gieo đợt 2", "T2/12": "Cây con đợt 2", "T3/12": "Phân hóa mầm hoa",
-    "T1/1": "Phát triển nụ hoa", "T2/1": "Thu hoạch", "T3/1": "Thu hoạch",
-})
-
-DUACHUOT_GROWTH_STAGES = {f"T{d}/{m}": "Nghỉ" for m in range(1, 13) for d in range(1, 4)}
-DUACHUOT_GROWTH_STAGES.update({
-    "T1/2": "Nảy mầm", "T2/2": "Cây con", "T3/2": "Sinh trưởng thân lá",
-    "T1/3": "Ra hoa - Đậu quả", "T2/3": "Phát triển quả", "T3/3": "Phát triển quả",
-    "T1/4": "Thu hoạch", "T2/4": "Thu hoạch",
-    "T3/6": "Ra hoa - Đậu quả",
-    "T1/7": "Nảy mầm", "T2/7": "Cây con", "T3/7": "Sinh trưởng thân lá",
-    "T1/8": "Ra hoa - Đậu quả", "T2/8": "Ra hoa - Đậu quả", "T3/8": "Thu hoạch",
-})
-
-BIXANH_GROWTH_STAGES = {f"T{d}/{m}": "Nghỉ" for m in range(1, 13) for d in range(1, 4)}
-BIXANH_GROWTH_STAGES.update({
-    "T1/2": "Nảy mầm", "T2/2": "Cây con", "T3/2": "Sinh trưởng thân lá",
-    "T1/3": "Sinh trưởng thân lá", "T2/3": "Phát triển hoa, quả", "T3/3": "Phát triển quả",
-    "T1/4": "Phát triển quả", "T2/4": "Thu hoạch", "T3/4": "Thu hoạch",
-    "T1/5": "Làm đất", "T3/5": "Gieo, nảy mầm",
-    "T1/6": "Sinh trưởng thân lá", "T2/6": "Ra hoa", "T3/6": "Đậu quả",
-    "T1/7": "Phát triển quả", "T2/7": "Phát triển quả", "T3/7": "Sinh trưởng thân lá",
-    "T1/8": "Thu hoạch", "T2/8": "Thu hoạch",
-})
-
+# Vật nuôi phát triển liên tục quanh năm
 LON_GROWTH_STAGES = {f"T{d}/{m}": "Sinh trưởng & Vỗ béo" for m in range(1, 13) for d in range(1, 4)}
 GA_GROWTH_STAGES = {f"T{d}/{m}": "Sinh trưởng & Đẻ trứng" for m in range(1, 13) for d in range(1, 4)}
 
-
+# Ngưỡng nhiệt rủi ro mở rộng cho lúa
 LUA_TEMP_RISK = {
     "Gieo, nảy mầm": (10, 45),
     "Mạ":            (12, 35),
@@ -884,8 +862,7 @@ def compute_decade_risks(df_decadal):
     if df_decadal is None or df_decadal.empty:
         return {}
 
-    # Cập nhật danh sách crop cụ thể
-    risks = {crop: {} for crop in ["Lúa", "Bắp cải", "Súp lơ", "Dưa chuột", "Bí xanh", "Lợn", "Gà"]}
+    risks = {crop: {} for crop in ["Lúa", "Rau", "Lợn", "Gà"]}
 
     for _, row in df_decadal.iterrows():
         decade = row["decade"]
@@ -893,36 +870,27 @@ def compute_decade_risks(df_decadal):
         RH = row.get("RH2m", 75)
         R = row.get("R")
 
-        # Lúa
-        stage_lua = LUA_GROWTH_STAGES.get(decade, "")
-        t_risk_lua = temp_to_risk_lua(T, stage_lua) if stage_lua else 0
-        r_risk_lua = rain_to_risk(R) if stage_lua and stage_lua != "Nghỉ" else 0
-        risks["Lúa"][decade] = max(t_risk_lua, r_risk_lua)
+        stage = LUA_GROWTH_STAGES.get(decade, "")
+        t_risk = temp_to_risk_lua(T, stage) if stage else 0
+        r_risk = rain_to_risk(R) if stage and stage != "Nghỉ" else 0
+        risks["Lúa"][decade] = max(t_risk, r_risk)
 
-        # Các loại rau
-        for crop_name, stages_dict, t_min, t_max in [
-            ("Bắp cải", BAPCAI_GROWTH_STAGES, 10, 28),
-            ("Súp lơ", SUPLO_GROWTH_STAGES, 10, 25),
-            ("Dưa chuột", DUACHUOT_GROWTH_STAGES, 15, 35),
-            ("Bí xanh", BIXANH_GROWTH_STAGES, 15, 35),
-        ]:
-            stage = stages_dict.get(decade, "")
-            t_risk = 0
-            if T is not None and stage and stage not in ["Nghỉ", "Làm đất", "Đất trống"]:
-                if T > t_max + 2 or T < t_min - 2:
-                    t_risk = 3
-                elif T > t_max or T < t_min:
-                    t_risk = 2
-                else:
-                    t_risk = 1
-            r_risk = rain_to_risk(R) if stage and stage not in ["Nghỉ", "Làm đất", "Đất trống"] else 0
-            risks[crop_name][decade] = max(t_risk, r_risk)
+        # Rau: Áp dụng rủi ro khi không trong giai đoạn "Đất trống" hoặc "Làm đất"
+        stage_rau = RAU_GROWTH_STAGES.get(decade, "")
+        t_risk_rau = 0
+        if T is not None and stage_rau not in ["Đất trống", "Làm đất"]:
+            if T > 38 or T < 10:
+                t_risk_rau = 3
+            elif T > 35 or T < 15:
+                t_risk_rau = 2
+            else:
+                t_risk_rau = 1
+        r_risk_rau = rain_to_risk(R) if stage_rau not in ["Đất trống", "Làm đất"] else 0
+        risks["Rau"][decade] = max(t_risk_rau, r_risk_rau)
 
-        # Lợn
         thi = compute_pig_thi(T, RH if RH else 75)
         risks["Lợn"][decade] = thi_to_risk_pig(thi)
 
-        # Gà
         t_risk_ga = 0
         if T is not None:
             if T > 35:
@@ -1505,9 +1473,8 @@ def _fig_to_html_div(fig, div_id, export_height=None, export_width=None):
 def build_full_bulletin_html(commune_name, crops, period, month_labels,
                               df_r, df_t, df_decadal, xacsuat_data, gdf_xa,
                               active_decades, decade_risks,
-                              growth_stages_lua, growth_stages_bapcai,
-                              growth_stages_suplo, growth_stages_duachuot,
-                              growth_stages_bixanh, growth_stages_lon, growth_stages_ga,
+                              growth_stages_lua, growth_stages_rau,
+                              growth_stages_lon, growth_stages_ga,
                               start_m, end_m, yr, mo):
     forecast_months = []
     for offset in range(1, 4):
@@ -1533,7 +1500,7 @@ def build_full_bulletin_html(commune_name, crops, period, month_labels,
 
     # ─── Bảng rủi ro từng đối tượng ───
     risk_sections_html = ""
-    emoji_map = {"Lúa": "🌾", "Bắp cải": "🥬", "Súp lơ": "🥦", "Dưa chuột": "🥒", "Bí xanh": "🍈", "Lợn": "🐷", "Gà": "🐔"}
+    emoji_map = {"Lúa": "🌾", "Rau": "🥬", "Lợn": "🐷", "Gà": "🐔"}
 
     for crop in crops:
         emoji = emoji_map.get(crop, "🌿")
@@ -1541,58 +1508,48 @@ def build_full_bulletin_html(commune_name, crops, period, month_labels,
         if crop == "Lúa":
             gs = growth_stages_lua
             diseases = [
-                ("Rầy", {d: min(3, decade_risks.get(crop, {}).get(d, 1)) for d in active_decades}),
+                ("Rầy", {d: min(3, decade_risks.get("Lúa", {}).get(d, 1)+0) for d in active_decades}),
                 ("Sâu cuốn lá", {d: min(3, max(1, 2 if df_decadal is not None and not df_decadal.empty else 1)) for d in active_decades}),
                 ("Đục thân", {d: 1 for d in active_decades}),
-                ("Đạo ôn", {d: min(3, decade_risks.get(crop, {}).get(d, 1)) for d in active_decades}),
-                ("Nấm cổ bông / Khô vằn", {d: 1 for d in active_decades}),
+                ("Đạo ôn", {d: min(3, decade_risks.get("Lúa", {}).get(d, 1)) for d in active_decades}),
+                ("Nấm cổ bông", {d: 1 for d in active_decades}),
+                ("Khô vằn", {d: 1 for d in active_decades}),
+                ("Rầy nâu", {d: min(3, decade_risks.get("Lúa", {}).get(d, 1)) for d in active_decades}),
             ]
-        elif crop == "Bắp cải":
-            gs = growth_stages_bapcai
+        elif crop == "Rau":
+            gs = growth_stages_rau
             diseases = [
-                ("Sâu tơ / Bọ nhảy", {d: 1 for d in active_decades}),
                 ("Sâu xanh", {d: 1 for d in active_decades}),
-                ("Bệnh thối nhũn", {d: min(3, decade_risks.get(crop, {}).get(d, 1)) for d in active_decades}),
-                ("Bệnh đốm vòng / Phấn trắng", {d: min(3, decade_risks.get(crop, {}).get(d, 1)) for d in active_decades}),
-            ]
-        elif crop == "Súp lơ":
-            gs = growth_stages_suplo
-            diseases = [
-                ("Sâu tơ / Bọ nhảy", {d: 1 for d in active_decades}),
-                ("Sương mai", {d: min(3, decade_risks.get(crop, {}).get(d, 1)) for d in active_decades}),
-                ("Bệnh đốm trắng", {d: 1 for d in active_decades}),
-            ]
-        elif crop == "Dưa chuột":
-            gs = growth_stages_duachuot
-            diseases = [
-                ("Bọ cánh cứng / Bọ trĩ", {d: 1 for d in active_decades}),
-                ("Sương mai", {d: min(3, decade_risks.get(crop, {}).get(d, 1)) for d in active_decades}),
-                ("Mốc trắng / Phấn trắng", {d: 1 for d in active_decades}),
-                ("Thán thư", {d: min(3, decade_risks.get(crop, {}).get(d, 1)) for d in active_decades}),
-            ]
-        elif crop == "Bí xanh":
-            gs = growth_stages_bixanh
-            diseases = [
-                ("Bọ cánh cứng", {d: 1 for d in active_decades}),
-                ("Sâu non ăn lá, hoa", {d: 1 for d in active_decades}),
-                ("Bệnh héo rũ", {d: min(3, decade_risks.get(crop, {}).get(d, 1)) for d in active_decades}),
-                ("Phấn trắng / Sương mai", {d: 1 for d in active_decades}),
+                ("Sâu tơ", {d: 1 for d in active_decades}),
+                ("Rệp", {d: 1 for d in active_decades}),
+                ("Bọ nhảy", {d: 1 for d in active_decades}),
+                ("Bệnh thối gốc", {d: min(3, decade_risks.get("Rau", {}).get(d, 1)) for d in active_decades}),
+                ("Sương mai", {d: min(3, decade_risks.get("Rau", {}).get(d, 1)) for d in active_decades}),
             ]
         elif crop == "Lợn":
             gs = growth_stages_lon
             diseases = [
-                ("Dịch tả lợn / Lở mồm long móng", {d: 1 for d in active_decades}),
-                ("Tai xanh / Suyễn lợn", {d: 1 for d in active_decades}),
-                ("Tiêu chảy / Đóng dấu lợn", {d: min(3, decade_risks.get(crop, {}).get(d, 1)) for d in active_decades}),
-                ("Tụ huyết trùng", {d: min(3, decade_risks.get(crop, {}).get(d, 1)) for d in active_decades}),
+                ("Dịch tả lợn Châu Phi", {d: 1 for d in active_decades}),
+                ("Dịch tả lợn cổ điển", {d: 1 for d in active_decades}),
+                ("Viêm phổi dính sườn", {d: 1 for d in active_decades}),
+                ("Suyễn lợn", {d: 1 for d in active_decades}),
+                ("Tai xanh (PRRS)", {d: 1 for d in active_decades}),
+                ("Tiêu chảy do E. coli", {d: min(3, decade_risks.get("Lợn", {}).get(d, 1)) for d in active_decades}),
+                ("Đóng dấu lợn", {d: min(3, decade_risks.get("Lợn", {}).get(d, 1)) for d in active_decades}),
+                ("Lở mồm long móng", {d: 1 for d in active_decades}),
+                ("Tụ huyết trùng lợn", {d: min(3, decade_risks.get("Lợn", {}).get(d, 1)) for d in active_decades}),
             ]
         else:  # Gà
             gs = growth_stages_ga
             diseases = [
-                ("Cúm gia cầm / Hen gà", {d: 1 for d in active_decades}),
-                ("Newcastle / Đậu gà", {d: 1 for d in active_decades}),
-                ("Cầu trùng / Viêm ruột", {d: min(3, decade_risks.get(crop, {}).get(d, 1)) for d in active_decades}),
-                ("Ký sinh trùng đường máu", {d: min(3, decade_risks.get(crop, {}).get(d, 1)) for d in active_decades}),
+                ("Hen gà", {d: 1 for d in active_decades}),
+                ("Cúm gia cầm độc lực cao", {d: 1 for d in active_decades}),
+                ("Cầu trùng gà", {d: min(3, decade_risks.get("Gà", {}).get(d, 1)) for d in active_decades}),
+                ("Viêm ruột hoại tử", {d: 1 for d in active_decades}),
+                ("Newcastle", {d: 1 for d in active_decades}),
+                ("Tụ huyết trùng gia cầm", {d: min(3, decade_risks.get("Gà", {}).get(d, 1)) for d in active_decades}),
+                ("Ký sinh trùng đường máu", {d: min(3, decade_risks.get("Gà", {}).get(d, 1)) for d in active_decades}),
+                ("Đậu gà", {d: min(3, decade_risks.get("Gà", {}).get(d, 1)) for d in active_decades}),
             ]
 
         table_html = render_risk_table(crop, active_decades, decade_risks, gs, diseases)
@@ -1777,7 +1734,7 @@ def build_full_bulletin_html(commune_name, crops, period, month_labels,
     </div>
 
     <div class="footer-note">
-      Bản tin được tạo tự động từ hệ thống Bản tin Khí hậu Quảng Ninh — phiên bản 1.3.6
+      Bản tin được tạo tự động từ hệ thống Bản tin Khí hậu Quảng Ninh — phiên bản 1.3.7
     </div>
   </div>
 </body>
@@ -1788,9 +1745,8 @@ def build_full_bulletin_html(commune_name, crops, period, month_labels,
 def render_export_button(commune_name, crops, period, month_labels,
                           df_r, df_t, df_decadal, xacsuat_data, gdf_xa,
                           active_decades, decade_risks,
-                          growth_stages_lua, growth_stages_bapcai,
-                          growth_stages_suplo, growth_stages_duachuot,
-                          growth_stages_bixanh, growth_stages_lon, growth_stages_ga,
+                          growth_stages_lua, growth_stages_rau,
+                          growth_stages_lon, growth_stages_ga,
                           start_m, end_m, yr, mo, button_key):
     if st.button("📤 Export bản tin", key=button_key, type="primary", use_container_width=False):
         with st.spinner("📄 Đang tạo bản tin HTML …"):
@@ -1798,9 +1754,8 @@ def render_export_button(commune_name, crops, period, month_labels,
                 commune_name, crops, period, month_labels,
                 df_r, df_t, df_decadal, xacsuat_data, gdf_xa,
                 active_decades, decade_risks,
-                growth_stages_lua, growth_stages_bapcai,
-                growth_stages_suplo, growth_stages_duachuot,
-                growth_stages_bixanh, growth_stages_lon, growth_stages_ga,
+                growth_stages_lua, growth_stages_rau,
+                growth_stages_lon, growth_stages_ga,
                 start_m, end_m, yr, mo,
             )
         b64 = base64.b64encode(html_doc.encode("utf-8")).decode("ascii")
@@ -1850,10 +1805,7 @@ def render_commune_bulletin(commune_name, crops, period, month_labels,
 
     decade_risks = compute_decade_risks(df_decadal)
     growth_stages_lua = {d: LUA_GROWTH_STAGES.get(d, "") for d in active_decades}
-    growth_stages_bapcai = {d: BAPCAI_GROWTH_STAGES.get(d, "") for d in active_decades}
-    growth_stages_suplo = {d: SUPLO_GROWTH_STAGES.get(d, "") for d in active_decades}
-    growth_stages_duachuot = {d: DUACHUOT_GROWTH_STAGES.get(d, "") for d in active_decades}
-    growth_stages_bixanh = {d: BIXANH_GROWTH_STAGES.get(d, "") for d in active_decades}
+    growth_stages_rau = {d: RAU_GROWTH_STAGES.get(d, "") for d in active_decades}
     growth_stages_lon = {d: LON_GROWTH_STAGES.get(d, "") for d in active_decades}
     growth_stages_ga  = {d: GA_GROWTH_STAGES.get(d, "") for d in active_decades}
 
@@ -1913,7 +1865,7 @@ def render_commune_bulletin(commune_name, crops, period, month_labels,
 
     # ─── Risk tables per crop ───
     for crop in crops:
-        emoji = {"Lúa": "🌾", "Bắp cải": "🥬", "Súp lơ": "🥦", "Dưa chuột": "🥒", "Bí xanh": "🍈", "Lợn": "🐷", "Gà": "🐔"}.get(crop, "🌿")
+        emoji = {"Lúa": "🌾", "Rau": "🥬", "Lợn": "🐷", "Gà": "🐔"}.get(crop, "🌿")
         st.markdown(
             f'<div class="risk-header">{emoji} Mức độ rủi ro đối với {crop} '
             f'giai đoạn {start_m} đến {end_m} năm {yr if mo + 3 <= 12 else yr+1}</div>',
@@ -1923,58 +1875,48 @@ def render_commune_bulletin(commune_name, crops, period, month_labels,
         if crop == "Lúa":
             gs = growth_stages_lua
             diseases = [
-                ("Rầy", {d: min(3, decade_risks.get(crop, {}).get(d, 1)) for d in active_decades}),
+                ("Rầy", {d: min(3, decade_risks.get("Lúa", {}).get(d, 1)+0) for d in active_decades}),
                 ("Sâu cuốn lá", {d: min(3, max(1, 2 if df_decadal is not None and not df_decadal.empty else 1)) for d in active_decades}),
                 ("Đục thân", {d: 1 for d in active_decades}),
-                ("Đạo ôn", {d: min(3, decade_risks.get(crop, {}).get(d, 1)) for d in active_decades}),
-                ("Nấm cổ bông / Khô vằn", {d: 1 for d in active_decades}),
+                ("Đạo ôn", {d: min(3, decade_risks.get("Lúa", {}).get(d, 1)) for d in active_decades}),
+                ("Nấm cổ bông", {d: 1 for d in active_decades}),
+                ("Khô vằn", {d: 1 for d in active_decades}),
+                ("Rầy nâu", {d: min(3, decade_risks.get("Lúa", {}).get(d, 1)) for d in active_decades}),
             ]
-        elif crop == "Bắp cải":
-            gs = growth_stages_bapcai
+        elif crop == "Rau":
+            gs = growth_stages_rau
             diseases = [
-                ("Sâu tơ / Bọ nhảy", {d: 1 for d in active_decades}),
                 ("Sâu xanh", {d: 1 for d in active_decades}),
-                ("Bệnh thối nhũn", {d: min(3, decade_risks.get(crop, {}).get(d, 1)) for d in active_decades}),
-                ("Bệnh đốm vòng / Phấn trắng", {d: min(3, decade_risks.get(crop, {}).get(d, 1)) for d in active_decades}),
-            ]
-        elif crop == "Súp lơ":
-            gs = growth_stages_suplo
-            diseases = [
-                ("Sâu tơ / Bọ nhảy", {d: 1 for d in active_decades}),
-                ("Sương mai", {d: min(3, decade_risks.get(crop, {}).get(d, 1)) for d in active_decades}),
-                ("Bệnh đốm trắng", {d: 1 for d in active_decades}),
-            ]
-        elif crop == "Dưa chuột":
-            gs = growth_stages_duachuot
-            diseases = [
-                ("Bọ cánh cứng / Bọ trĩ", {d: 1 for d in active_decades}),
-                ("Sương mai", {d: min(3, decade_risks.get(crop, {}).get(d, 1)) for d in active_decades}),
-                ("Mốc trắng / Phấn trắng", {d: 1 for d in active_decades}),
-                ("Thán thư", {d: min(3, decade_risks.get(crop, {}).get(d, 1)) for d in active_decades}),
-            ]
-        elif crop == "Bí xanh":
-            gs = growth_stages_bixanh
-            diseases = [
-                ("Bọ cánh cứng", {d: 1 for d in active_decades}),
-                ("Sâu non ăn lá, hoa", {d: 1 for d in active_decades}),
-                ("Bệnh héo rũ", {d: min(3, decade_risks.get(crop, {}).get(d, 1)) for d in active_decades}),
-                ("Phấn trắng / Sương mai", {d: 1 for d in active_decades}),
+                ("Sâu tơ", {d: 1 for d in active_decades}),
+                ("Rệp", {d: 1 for d in active_decades}),
+                ("Bọ nhảy", {d: 1 for d in active_decades}),
+                ("Bệnh thối gốc", {d: min(3, decade_risks.get("Rau", {}).get(d, 1)) for d in active_decades}),
+                ("Sương mai", {d: min(3, decade_risks.get("Rau", {}).get(d, 1)) for d in active_decades}),
             ]
         elif crop == "Lợn":
             gs = growth_stages_lon
             diseases = [
-                ("Dịch tả lợn / Lở mồm long móng", {d: 1 for d in active_decades}),
-                ("Tai xanh / Suyễn lợn", {d: 1 for d in active_decades}),
-                ("Tiêu chảy / Đóng dấu lợn", {d: min(3, decade_risks.get(crop, {}).get(d, 1)) for d in active_decades}),
-                ("Tụ huyết trùng", {d: min(3, decade_risks.get(crop, {}).get(d, 1)) for d in active_decades}),
+                ("Dịch tả lợn Châu Phi", {d: 1 for d in active_decades}),
+                ("Dịch tả lợn cổ điển", {d: 1 for d in active_decades}),
+                ("Viêm phổi dính sườn", {d: 1 for d in active_decades}),
+                ("Suyễn lợn", {d: 1 for d in active_decades}),
+                ("Tai xanh (PRRS)", {d: 1 for d in active_decades}),
+                ("Tiêu chảy do E. coli", {d: min(3, decade_risks.get("Lợn", {}).get(d, 1)) for d in active_decades}),
+                ("Đóng dấu lợn", {d: min(3, decade_risks.get("Lợn", {}).get(d, 1)) for d in active_decades}),
+                ("Lở mồm long móng", {d: 1 for d in active_decades}),
+                ("Tụ huyết trùng lợn", {d: min(3, decade_risks.get("Lợn", {}).get(d, 1)) for d in active_decades}),
             ]
         else:  # Gà
             gs = growth_stages_ga
             diseases = [
-                ("Cúm gia cầm / Hen gà", {d: 1 for d in active_decades}),
-                ("Newcastle / Đậu gà", {d: 1 for d in active_decades}),
-                ("Cầu trùng / Viêm ruột", {d: min(3, decade_risks.get(crop, {}).get(d, 1)) for d in active_decades}),
-                ("Ký sinh trùng đường máu", {d: min(3, decade_risks.get(crop, {}).get(d, 1)) for d in active_decades}),
+                ("Hen gà", {d: 1 for d in active_decades}),
+                ("Cúm gia cầm độc lực cao", {d: 1 for d in active_decades}),
+                ("Cầu trùng gà", {d: min(3, decade_risks.get("Gà", {}).get(d, 1)) for d in active_decades}),
+                ("Viêm ruột hoại tử", {d: 1 for d in active_decades}),
+                ("Newcastle", {d: 1 for d in active_decades}),
+                ("Tụ huyết trùng gia cầm", {d: min(3, decade_risks.get("Gà", {}).get(d, 1)) for d in active_decades}),
+                ("Ký sinh trùng đường máu", {d: min(3, decade_risks.get("Gà", {}).get(d, 1)) for d in active_decades}),
+                ("Đậu gà", {d: min(3, decade_risks.get("Gà", {}).get(d, 1)) for d in active_decades}),
             ]
 
         html_risk = render_risk_table(crop, active_decades, decade_risks, gs, diseases)
@@ -2129,10 +2071,7 @@ def page_ban_tin_xa():
 
     decade_risks = compute_decade_risks(df_decadal)
     growth_stages_lua = {d: LUA_GROWTH_STAGES.get(d, "") for d in active_decades}
-    growth_stages_bapcai = {d: BAPCAI_GROWTH_STAGES.get(d, "") for d in active_decades}
-    growth_stages_suplo = {d: SUPLO_GROWTH_STAGES.get(d, "") for d in active_decades}
-    growth_stages_duachuot = {d: DUACHUOT_GROWTH_STAGES.get(d, "") for d in active_decades}
-    growth_stages_bixanh = {d: BIXANH_GROWTH_STAGES.get(d, "") for d in active_decades}
+    growth_stages_rau = {d: RAU_GROWTH_STAGES.get(d, "") for d in active_decades}
     growth_stages_lon = {d: LON_GROWTH_STAGES.get(d, "") for d in active_decades}
     growth_stages_ga  = {d: GA_GROWTH_STAGES.get(d, "") for d in active_decades}
     
@@ -2150,9 +2089,8 @@ def page_ban_tin_xa():
                 sel_commune, crops, sel_period, month_labels,
                 df_r, df_t, df_decadal, xacsuat_data, gdf_xa,
                 active_decades, decade_risks,
-                growth_stages_lua, growth_stages_bapcai,
-                growth_stages_suplo, growth_stages_duachuot,
-                growth_stages_bixanh, growth_stages_lon, growth_stages_ga,
+                growth_stages_lua, growth_stages_rau,
+                growth_stages_lon, growth_stages_ga,
                 start_m, end_m, yr, mo,
                 button_key="export_bulletin_btn",
             )
@@ -2206,7 +2144,7 @@ with st.sidebar:
     st.markdown("Phòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu")
     st.markdown("Viện Khoa học Khí tượng Thủy văn Môi trường và Biển")
     st.markdown("---")
-    st.markdown("*Phiên bản 1.3.6 – 06/2026*")
+    st.markdown("*Phiên bản 1.3.7 – 06/2026*")
 
 if   menu == "🏠 Tổng quan":                        page_tong_quan()
 elif menu == "🔄 Dự báo khí hậu mùa":                page_du_bao()
