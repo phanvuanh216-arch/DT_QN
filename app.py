@@ -1182,7 +1182,7 @@ def build_full_bulletin_html(commune_name, crops, period, month_labels, df_r, df
     <div class="doc-header">
       <p class="org">Viện Khoa học Khí tượng Thủy văn Môi trường và Biển — Phòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu</p>
       <h1>📋 Bản tin cảnh báo rủi ro khí hậu – Xã {commune_name}</h1>
-      <div class="meta">Thời kỳ dự báo: tháng {start_m} đến tháng {end_m} &nbsp;•&nbsp;</div>
+      <div class="meta">Thời kỳ dự báo: tháng {start_m} đến tháng {end_m} &nbsp;</div>
     </div>
     <div class="toolbar"><button class="btn btn-print" onclick="window.print()">🖨️ In / Lưu PDF</button></div>
     <div class="content">
