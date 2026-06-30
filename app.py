@@ -1207,7 +1207,7 @@ def render_export_button(commune_name, crops, period, month_labels, df_r, df_t, 
         with st.spinner("📄 Đang tạo bản tin HTML …"):
             html_doc = build_full_bulletin_html(commune_name, crops, period, month_labels, df_r, df_t, df_decadal, xacsuat_data, gdf_xa, active_decades, decade_risks, start_m, end_m, yr, mo)
         b64 = base64.b64encode(html_doc.encode("utf-8")).decode("ascii")
-        components.html(f"""<script>(function() {{ const b64 = "{b64}"; const byteChars = atob(b64); const byteNumbers = new Array(byteChars.length); for (let i = 0; i < byteChars.length; i++) {{ byteNumbers[i] = byteChars.charCodeAt(i); }} const byteArray = new Uint8Array(byteNumbers); const blob = new Blob([byteArray], {{type: 'text/html;charset=utf-8'}}); const url = URL.createObjectURL(blob); window.open(url, '_blank'); }})();</script>""", height=0)
+        components.html(f"""<script>(function() {{ const b64 = "{b64}"; const byteChars = atob(b64); const byteNumbers = new Array(byteChars.length); for (let i = 0; i < byteChars.length; i++) {{ byteNumbers[i] = byteChars.charCodeAt(i); }} const byteArray = new Uint8Array(byteNumbers);</script>""", height=0)
         st.success("✅ Đã mở bản tin trong tab mới. Nếu trình duyệt chặn pop-up, vui lòng cho phép pop-up cho trang này rồi bấm lại.")
 
 # ══════════════════════════════════════════════════════════════════════════════
