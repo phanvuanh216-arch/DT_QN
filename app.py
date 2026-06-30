@@ -6,6 +6,10 @@ THAY ĐỔI v1.3.8 – MODULE BẢN TIN CẢNH BÁO RỦI RO KHÍ HẬU:
   [NEW]  Tách biệt chi tiết Bắp cải, Súp lơ, Dưa chuột, Bí xanh thay cho "Rau" chung
   [NEW]  Tự động ẩn/hiện rau theo mùa vụ trong Bản tin cảnh báo rủi ro khí hậu
          (vd: Bắp cải trái vụ hè sẽ tự ẩn, vào vụ đông sẽ tự hiện)
+THAY ĐỔI v1.3.9 – MODULE TỔNG QUAN:
+  [NEW]  Chèn ảnh nền Quảng Ninh cho banner module Tổng quan
+  [NEW]  Header gồm logo Viện + tên Viện, bấm vào sẽ liên kết tới Cổng TTĐT
+         Sở Khoa học và Công nghệ tỉnh Quảng Ninh
   [KEEP] Giữ nguyên toàn bộ code cấu trúc giao diện v1.3.4
 """
 
@@ -80,6 +84,35 @@ st.markdown("""
         display: flex; justify-content: flex-end; align-items: center;
         margin: 4px 0 10px 0;
     }
+    .org-header {
+        display: flex; align-items: center; gap: 12px;
+        padding: 10px 18px; margin-bottom: 12px;
+        background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px;
+    }
+    .org-header img {
+        height: 48px; width: 48px; object-fit: contain; border-radius: 6px; flex-shrink: 0;
+    }
+    .org-header .org-logo-fallback {
+        height: 48px; width: 48px; flex-shrink: 0; display: flex; align-items: center;
+        justify-content: center; font-size: 26px; background: #eef3f6; border-radius: 6px;
+    }
+    .org-header .org-text a {
+        color: #1e3a5f; text-decoration: none; font-weight: 700; font-size: 1.05rem;
+    }
+    .org-header .org-text a:hover { color: #2d6a4f; text-decoration: underline; }
+    .org-header .org-sub { font-size: 0.78rem; color: #667085; margin-top: 2px; }
+    .hero-banner {
+        position: relative; border-radius: 14px; overflow: hidden; margin-bottom: 18px;
+        background-size: cover; background-position: center; min-height: 260px;
+        display: flex; align-items: flex-end;
+    }
+    .hero-banner::before {
+        content: ""; position: absolute; inset: 0;
+        background: linear-gradient(180deg, rgba(30,58,95,0.18) 0%, rgba(13,26,43,0.82) 100%);
+    }
+    .hero-content { position: relative; z-index: 1; padding: 26px 28px; color: #fff; }
+    .hero-content h1 { margin: 0 0 8px 0; font-size: 1.65rem; line-height: 1.3; }
+    .hero-content p { margin: 0; font-size: 0.96rem; opacity: 0.95; max-width: 760px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -95,6 +128,12 @@ SHP_XA_ROI_URL  = "https://raw.githubusercontent.com/phanvuanh216-arch/DT_QN/mai
 ERA5_R_URL      = "https://raw.githubusercontent.com/phanvuanh216-arch/DT_QN/main/R_ERA5_CDFT_corrected.xlsx"
 ERA5_T_URL      = "https://raw.githubusercontent.com/phanvuanh216-arch/DT_QN/main/T2m_ERA5_QM_corrected.xlsx"
 COMMUNE_LONLAT_URL = "https://raw.githubusercontent.com/phanvuanh216-arch/DT_QN/main/lon_lat_quangninh.xlsx"
+
+# Ảnh nền + thông tin header cho module "Tổng quan"
+TONGQUAN_BG_URL    = "https://raw.githubusercontent.com/phanvuanh216-arch/DT_QN/main/anh_dep_quang_ninh_giao_dien_1.jpg"
+INSTITUTE_LOGO_URL = ""  # TODO: dán URL ảnh logo Viện vào đây (vd: link raw.githubusercontent.com tới file logo .png/.jpg)
+INSTITUTE_NAME      = "Viện Khoa học Khí tượng Thủy văn Môi trường và Biển"
+DOST_QUANGNINH_URL  = "https://www.quangninh.gov.vn/so/sokhoahoccongnghe/trang/default.aspx"
 
 CLIMATE_VARS = {
     "ano.T2m":  {"label": "Nhiệt độ trung bình (T2m)", "unit": "°C",  "cmap": "RdBu_r", "levels": list(range(-5, 6))},
@@ -1287,8 +1326,31 @@ def render_commune_bulletin(commune_name, crops, period, month_labels, df_r, df_
 # ══════════════════════════════════════════════════════════════════════════════
 
 def page_tong_quan():
-    st.title("🌾 Công cụ quản lý rủi ro khí hậu đối với cây trồng và vật nuôi tỉnh Quảng Ninh")
-    st.markdown("Hệ thống hỗ trợ tạo **bản tin cảnh báo khí hậu** cho các xã tại Quảng Ninh, bao gồm đánh giá rủi ro cho **Lúa, Bắp cải, Súp lơ, Dưa chuột, Bí xanh, Lợn, Gà** theo từng kỳ tháng.")
+    # ── Header: logo Viện + tên Viện liên kết tới Cổng TTĐT Sở KH&CN tỉnh Quảng Ninh ──
+    if INSTITUTE_LOGO_URL:
+        logo_html = f'<img src="{INSTITUTE_LOGO_URL}" alt="Logo Viện">'
+    else:
+        logo_html = '<div class="org-logo-fallback">🏛️</div>'
+    st.markdown(f"""
+    <div class="org-header">
+        {logo_html}
+        <div class="org-text">
+            <a href="{DOST_QUANGNINH_URL}" target="_blank" rel="noopener noreferrer">{INSTITUTE_NAME}</a>
+            <div class="org-sub">Liên kết chuyên môn với Sở Khoa học và Công nghệ tỉnh Quảng Ninh</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Banner ảnh nền Quảng Ninh ──
+    st.markdown(f"""
+    <div class="hero-banner" style="background-image:url('{TONGQUAN_BG_URL}');">
+        <div class="hero-content">
+            <h1>🌾 Công cụ quản lý rủi ro khí hậu đối với cây trồng và vật nuôi tỉnh Quảng Ninh</h1>
+            <p>Hệ thống hỗ trợ tạo <b>bản tin cảnh báo khí hậu</b> cho các xã tại Quảng Ninh, bao gồm đánh giá rủi ro cho <b>Lúa, Bắp cải, Súp lơ, Dưa chuột, Bí xanh, Lợn, Gà</b> theo từng kỳ tháng.</p>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("🏘️ Số xã", str(len(COMMUNE_CROPS)))
     c2.metric("🌱 Cây trồng / Vật nuôi", "7")
@@ -1378,7 +1440,7 @@ def page_phan_hoi():
 with st.sidebar:
     st.markdown("## 🌾 Bản tin Khí hậu\n**Quảng Ninh – Nông nghiệp**\n---")
     menu = st.radio("📌 Chọn module:", ["🏠 Tổng quan", "🔄 Dự báo khí hậu mùa", "📋 Bản tin cảnh báo rủi ro khí hậu", "💾 Bản tin đã lưu", "📤 Export bản tin", "💬 Phản hồi"], label_visibility="collapsed")
-    st.markdown("---\nPhòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu\nViện Khoa học Khí tượng Thủy văn Môi trường và Biển\n---\n*Phiên bản 1.3.8 – 06/2026*")
+    st.markdown("---\nPhòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu\nViện Khoa học Khí tượng Thủy văn Môi trường và Biển\n---\n*Phiên bản 1.3.9 – 06/2026*")
 
 if   menu == "🏠 Tổng quan":                        page_tong_quan()
 elif menu == "🔄 Dự báo khí hậu mùa":                page_du_bao()
