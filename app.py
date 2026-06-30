@@ -1189,7 +1189,7 @@ def build_full_bulletin_html(commune_name, crops, period, month_labels, df_r, df
       <div class="info-row">
         <div class="info-card"><div class="label">🏘️ Xã</div><div class="value">{commune_name}</div></div>
         <div class="info-card"><div class="label">🌱 Đối tượng nông nghiệp đang vào vụ</div><div class="value">{", ".join(crops) if crops else "—"}</div></div>
-        <div class="info-card"><div class="label">📅 Thời kỳ dự báo</div><div class="value">{month_labels[0]} → {month_labels[-1]}</div></div>
+        <div class="info-card"><div class="label">📅 Hạn dự báo</div><div class="value">{month_labels[0]} → {month_labels[-1]}</div></div>
       </div>
       <div class="two-col">
         <div class="col-map"><div class="section-title">📍 Vị trí xã</div><div class="card-chart">{map_div if map_div else "<p style='color:#888;'>Không có dữ liệu bản đồ.</p>"}</div></div>
