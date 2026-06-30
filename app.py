@@ -1353,7 +1353,7 @@ def page_tong_quan():
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("🏘️ Số xã", str(len(COMMUNE_CROPS)))
     c2.metric("🌱 Cây trồng / Vật nuôi", "7")
-    c3.metric("📅 Kỳ dự báo", "3 tháng")
+    c3.metric("📅 Hạn dự báo", "3 tháng")
     c4.metric("📄 Bản tin đã tạo", "0")
 
 def page_du_bao():
@@ -1368,7 +1368,7 @@ def page_du_bao():
     periods_desc = list(reversed(periods)); yr_mo_labels = [f"{p[:4]}/{p[4:]}" for p in periods_desc]
     col1, col2, col3 = st.columns([2, 2, 2])
     with col1:
-        sel_idx = st.selectbox("📅 Kỳ dự báo:", range(len(periods_desc)), format_func=lambda i: yr_mo_labels[i], help="Tự động cập nhật khi server có thư mục mới")
+        sel_idx = st.selectbox("📅 Hạn dự báo:", range(len(periods_desc)), format_func=lambda i: yr_mo_labels[i], help="Tự động cập nhật khi server có thư mục mới")
         sel_period = periods_desc[sel_idx]
 
     yr, mo = int(sel_period[:4]), int(sel_period[4:])
