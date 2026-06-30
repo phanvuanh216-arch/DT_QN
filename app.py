@@ -1198,7 +1198,7 @@ def build_full_bulletin_html(commune_name, crops, period, month_labels, df_r, df
       <div class="section-title">📊 Dự báo khí hậu xác suất</div><div class="card" style="overflow-x:auto;">{xacsuat_html}</div>
       <hr class="sep">{risk_sections_html}
     </div>
-    <div class="footer-note">Bản tin được tạo tự động từ hệ thống Bản tin Khí hậu Quảng Ninh — phiên bản 1.3.8</div>
+    <div class="footer-note"></div>
   </div>
 </body></html>"""
 
