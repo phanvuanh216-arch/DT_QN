@@ -1182,14 +1182,14 @@ def build_full_bulletin_html(commune_name, crops, period, month_labels, df_r, df
     <div class="doc-header">
       <p class="org">Viện Khoa học Khí tượng Thủy văn Môi trường và Biển — Phòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu</p>
       <h1>📋 Bản tin cảnh báo rủi ro khí hậu – Xã {commune_name}</h1>
-      <div class="meta">Thời kỳ dự báo: tháng {start_m} đến tháng {end_m} &nbsp;</div>
+      <div class="meta">Giai đoạn dự báo: tháng {start_m} đến tháng {end_m} &nbsp;•&nbsp; Kỳ dữ liệu: {period[:4]}/{period[4:]} &nbsp;•&nbsp; Xuất lúc: {datetime.now().strftime("%H:%M %d/%m/%Y")}</div>
     </div>
     <div class="toolbar"><button class="btn btn-print" onclick="window.print()">🖨️ In / Lưu PDF</button></div>
     <div class="content">
       <div class="info-row">
         <div class="info-card"><div class="label">🏘️ Xã</div><div class="value">{commune_name}</div></div>
         <div class="info-card"><div class="label">🌱 Đối tượng nông nghiệp đang vào vụ</div><div class="value">{", ".join(crops) if crops else "—"}</div></div>
-        <div class="info-card"><div class="label">📅 Hạn dự báo</div><div class="value">{month_labels[0]} → {month_labels[-1]}</div></div>
+        <div class="info-card"><div class="label">📅 Thời điểm dự báo</div><div class="value">{month_labels[0]} → {month_labels[-1]}</div></div>
       </div>
       <div class="two-col">
         <div class="col-map"><div class="section-title">📍 Vị trí xã</div><div class="card-chart">{map_div if map_div else "<p style='color:#888;'>Không có dữ liệu bản đồ.</p>"}</div></div>
@@ -1198,7 +1198,6 @@ def build_full_bulletin_html(commune_name, crops, period, month_labels, df_r, df
       <div class="section-title">📊 Dự báo khí hậu xác suất</div><div class="card" style="overflow-x:auto;">{xacsuat_html}</div>
       <hr class="sep">{risk_sections_html}
     </div>
-    <div class="footer-note"></div>
   </div>
 </body></html>"""
 
@@ -1207,7 +1206,7 @@ def render_export_button(commune_name, crops, period, month_labels, df_r, df_t, 
         with st.spinner("📄 Đang tạo bản tin HTML …"):
             html_doc = build_full_bulletin_html(commune_name, crops, period, month_labels, df_r, df_t, df_decadal, xacsuat_data, gdf_xa, active_decades, decade_risks, start_m, end_m, yr, mo)
         b64 = base64.b64encode(html_doc.encode("utf-8")).decode("ascii")
-        components.html(f"""<script>(function() {{ const b64 = "{b64}"; const byteChars = atob(b64); const byteNumbers = new Array(byteChars.length); for (let i = 0; i < byteChars.length; i++) {{ byteNumbers[i] = byteChars.charCodeAt(i); }} const byteArray = new Uint8Array(byteNumbers);</script>""", height=0)
+        components.html(f"""<script>(function() {{ const b64 = "{b64}"; const byteChars = atob(b64); const byteNumbers = new Array(byteChars.length); for (let i = 0; i < byteChars.length; i++) {{ byteNumbers[i] = byteChars.charCodeAt(i); }} const byteArray = new Uint8Array(byteNumbers); const blob = new Blob([byteArray], {{type: 'text/html;charset=utf-8'}}); const url = URL.createObjectURL(blob); window.open(url, '_blank'); }})();</script>""", height=0)
         st.success("✅ Đã mở bản tin trong tab mới. Nếu trình duyệt chặn pop-up, vui lòng cho phép pop-up cho trang này rồi bấm lại.")
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1354,7 +1353,7 @@ def page_tong_quan():
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("🏘️ Số xã", str(len(COMMUNE_CROPS)))
     c2.metric("🌱 Cây trồng / Vật nuôi", "7")
-    c3.metric("📅 Thời kỳ dự báo", "3 tháng")
+    c3.metric("📅 Kỳ dự báo", "3 tháng")
     c4.metric("📄 Bản tin đã tạo", "0")
 
 def page_du_bao():
@@ -1369,7 +1368,7 @@ def page_du_bao():
     periods_desc = list(reversed(periods)); yr_mo_labels = [f"{p[:4]}/{p[4:]}" for p in periods_desc]
     col1, col2, col3 = st.columns([2, 2, 2])
     with col1:
-        sel_idx = st.selectbox("📅 Thời kỳ dự báo:", range(len(periods_desc)), format_func=lambda i: yr_mo_labels[i], help="Tự động cập nhật khi server có thư mục mới")
+        sel_idx = st.selectbox("📅 Kỳ dự báo:", range(len(periods_desc)), format_func=lambda i: yr_mo_labels[i], help="Tự động cập nhật khi server có thư mục mới")
         sel_period = periods_desc[sel_idx]
 
     yr, mo = int(sel_period[:4]), int(sel_period[4:])
@@ -1390,7 +1389,7 @@ def page_ban_tin_xa():
         with st.spinner("🔍 Kiểm tra dữ liệu …"): periods = fetch_available_periods()
         if not periods: st.error("❌ Không kết nối được server."); return
         periods_desc = list(reversed(periods))
-        sel_period = periods_desc[st.selectbox("📅 Thời kỳ dự báo:", range(len(periods_desc)), format_func=lambda i: f"{periods_desc[i][:4]}/{periods_desc[i][4:]}")]
+        sel_period = periods_desc[st.selectbox("📅 Kỳ dự báo:", range(len(periods_desc)), format_func=lambda i: f"{periods_desc[i][:4]}/{periods_desc[i][4:]}")]
         sel_commune = st.selectbox("🏘️ Chọn xã:", list(COMMUNE_CROPS.keys()))
 
     yr, mo = int(sel_period[:4]), int(sel_period[4:])
