@@ -1390,7 +1390,7 @@ def page_ban_tin_xa():
         with st.spinner("🔍 Kiểm tra dữ liệu …"): periods = fetch_available_periods()
         if not periods: st.error("❌ Không kết nối được server."); return
         periods_desc = list(reversed(periods))
-        sel_period = periods_desc[st.selectbox("📅 Hạn dự báo:", range(len(periods_desc)), format_func=lambda i: f"{periods_desc[i][:4]}/{periods_desc[i][4:]}")]
+        sel_period = periods_desc[st.selectbox("📅 Thời kỳ dự báo:", range(len(periods_desc)), format_func=lambda i: f"{periods_desc[i][:4]}/{periods_desc[i][4:]}")]
         sel_commune = st.selectbox("🏘️ Chọn xã:", list(COMMUNE_CROPS.keys()))
 
     yr, mo = int(sel_period[:4]), int(sel_period[4:])
@@ -1412,7 +1412,7 @@ def page_ban_tin_xa():
     crops, crops_hidden = get_active_crops(crops, active_decades)
 
     with col2:
-        st.markdown("**📅 Thời kỳ dự báo:**")
+        st.markdown("**📅 Hạn dự báo:**")
         st.info(f"Tháng {month_labels[0].split('Tháng ')[1]} → {month_labels[-1].split('Tháng ')[1]}")
         sub_label, sub_btn = st.columns([3, 1.4])
         with sub_label:
