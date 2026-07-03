@@ -7,9 +7,6 @@ netCDF4
 geopandas
 scipy
 shapely
-pyproj
-fiona
-rasterio
 openpyxl
 xarray
 folium
