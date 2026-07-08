@@ -21,6 +21,9 @@ THAY ĐỔI v1.4.0 – GIAO DIỆN & MODULE GIỚI THIỆU:
   [NEW]  Logo Viện: nếu chưa có ảnh logo thật, hiển thị biểu trưng mặc định
          (sóng biển + mặt trời) thay cho icon 🏛️ tạm thời
   [KEEP] Giữ nguyên toàn bộ logic xử lý dữ liệu, bản đồ, rủi ro của v1.3.9
+THAY ĐỔI v1.4.1 – GIAO DIỆN:
+  [NEW]  Đổi icon thu gọn/mở rộng sidebar (mũi tên "<<" / ">>") thành ô vuông
+         có 3 gạch ngang (hamburger icon) đồng bộ tông màu xanh biển đậm
 """
 
 import streamlit as st
@@ -66,6 +69,35 @@ st.markdown("""
     [data-testid="stToolbar"] { visibility: hidden !important; display: none !important; }
     [data-testid="stDecoration"] { display: none !important; }
     [data-testid="stStatusWidget"] { visibility: hidden !important; }
+
+    /* ── Đổi icon thu gọn/mở rộng sidebar (mũi tên "<<" / ">>") thành ô vuông 3 gạch ── */
+    [data-testid="collapsedControl"],
+    [data-testid="stSidebarCollapseButton"] {
+        background: linear-gradient(135deg, #073B4C 0%, #0F8B8D 100%) !important;
+        border-radius: 6px !important;
+        width: 34px !important;
+        height: 34px !important;
+        min-width: 34px !important;
+        min-height: 34px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border: none !important;
+    }
+    [data-testid="collapsedControl"] svg,
+    [data-testid="stSidebarCollapseButton"] svg {
+        display: none !important;
+    }
+    [data-testid="collapsedControl"]::before,
+    [data-testid="stSidebarCollapseButton"]::before {
+        content: "";
+        display: block;
+        width: 16px;
+        height: 2px;
+        background: #ffffff;
+        box-shadow: 0 -5px 0 #ffffff, 0 5px 0 #ffffff;
+    }
+
     .module-header {
         background: linear-gradient(135deg, #073B4C 0%, #0F8B8D 100%);
         color: white; padding: 10px 20px; border-radius: 8px;
