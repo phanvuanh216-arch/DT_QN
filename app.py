@@ -44,6 +44,16 @@ THAY ĐỔI v1.5.1 – GỘP MODULE:
   [NEW]  Bỏ mục "📖 Giới thiệu" riêng trong sidebar bên trái; sidebar giờ bắt
          đầu bằng "🏠 Trang chủ" (chứa toàn bộ nội dung Giới thiệu cũ)
   [NEW]  Thanh menu ngang trên cùng chỉ còn 2 mục: Trang chủ / Liên hệ
+THAY ĐỔI v1.5.2 – THIẾT KẾ LẠI MODULE "DỰ BÁO KHÍ HẬU MÙA":
+  [FIX]  Bỏ st.tabs bọc 2 st.fragment độc lập (nguyên nhân gây UI hiển thị
+         lặp 2 lần "Chọn biến"/"Công cụ bản đồ"/"Vẽ bản đồ" khi rerender) —
+         thay bằng 1 selectbox "Loại chuẩn sai" điều khiển 1 fragment duy nhất
+  [NEW]  Bố cục dạng dashboard khoa học: khung điều khiển (card bo góc, có
+         border) cố định bên trái gồm 2 nhóm rõ ràng "Biến hiển thị" và
+         "Tuỳ chọn bản đồ"; vùng bản đồ lớn bên phải, có khung placeholder
+         hướng dẫn khi chưa vẽ bản đồ
+  [NEW]  Thanh điều khiển Kỳ dự báo / Hạn dự báo / Loại chuẩn sai gộp vào 1
+         khung (card) ngay đầu trang thay vì rải rác
 """
 
 import streamlit as st
@@ -247,6 +257,25 @@ st.markdown("""
         font-size: 0.95rem; font-weight: 700; color: #073B4C; margin-bottom: 4px;
         display: flex; align-items: center; gap: 6px;
     }
+
+    /* ══════════ v1.5.2 – Khung điều khiển bản đồ dạng dashboard khoa học ══════════ */
+    .panel-title {
+        font-size: 0.82rem; font-weight: 800; color: #073B4C; letter-spacing: 0.3px;
+        text-transform: uppercase; margin: 2px 0 8px 0; display: flex; align-items: center; gap: 6px;
+    }
+    .panel-sep { border: none; border-top: 1px dashed #cfd8dc; margin: 14px 0 12px 0; }
+    .map-type-badge {
+        display: inline-flex; align-items: center; gap: 6px; background: #e8f4f8;
+        color: #073B4C; padding: 5px 12px; border-radius: 999px; font-size: 0.82rem;
+        font-weight: 700; margin-bottom: 10px; border: 1px solid #bfe0e6;
+    }
+    .map-placeholder {
+        display: flex; align-items: center; justify-content: center; flex-direction: column;
+        height: 480px; border: 1.5px dashed #b9c6cc; border-radius: 10px; background: #fbfdfe;
+        color: #8a97a0; text-align: center; gap: 6px;
+    }
+    .map-placeholder .big { font-size: 2.1rem; }
+    [data-testid="stVerticalBlockBorderWrapper"] { border-radius: 10px !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -1216,64 +1245,58 @@ def display_panel(state_key):
     st.caption("💡 Hover vào bản đồ để xem giá trị. Bấm legend để ẩn/hiện lớp xã.")
 
 # ══════════════════════════════════════════════════════════════════════════════
-# v1.5.0 — BẢNG ĐIỀU KHIỂN BẢN ĐỒ (tham khảo "Công cụ bản đồ" của kichban.imh.ac.vn:
-# Bản đồ nền / Các lớp hiển thị / Độ mờ layer / Lưới toạ độ)
+# v1.5.2 — MODULE "DỰ BÁO KHÍ HẬU MÙA": KHUNG ĐIỀU KHIỂN + BẢN ĐỒ (dạng dashboard)
+#   Thiết kế lại theo bố cục khoa học: 1 cột điều khiển cố định bên trái (chọn biến
+#   theo nhóm + tuỳ chọn hiển thị bản đồ), 1 vùng bản đồ lớn bên phải. Bỏ hẳn cách
+#   dùng st.tabs bọc 2 st.fragment độc lập (gây hiện tượng UI bị lặp/chồng nội dung
+#   khi Streamlit rerender fragment không đúng vị trí tab đang ẩn).
 # ══════════════════════════════════════════════════════════════════════════════
 
-def render_map_control_panel(tab_key, show_xa_default=False):
-    """
-    Trả về (basemap_style, show_xa, layer_opacity, show_grid, grid_step).
-    Hiển thị dạng popover gọn (giống hộp thoại nổi "Công cụ bản đồ" của kichban.imh.ac.vn).
-    """
-    panel_fn = st.popover if hasattr(st, "popover") else None
-    grid_step_map = {"Tự động": None, "1°": 1, "0.5°": 0.5, "0.25°": 0.25}
-
-    if panel_fn:
-        with panel_fn("🛠️ Công cụ bản đồ", use_container_width=False):
-            st.markdown('<div class="map-toolpanel-title">🗺️ Bản đồ nền</div>', unsafe_allow_html=True)
-            basemap_style = st.radio("Nền:", list(MAP_BASEMAP_STYLES.keys()), index=0, key=f"basemap_{tab_key}", label_visibility="collapsed")
-            st.markdown("---")
-            st.markdown('<div class="map-toolpanel-title">📑 Các lớp hiển thị</div>', unsafe_allow_html=True)
-            show_xa = st.toggle("Hiển thị lớp xã", value=show_xa_default, key=f"showxa_{tab_key}")
-            layer_opacity = st.slider("Độ mờ layer nội suy", 0.10, 1.00, 0.90, 0.05, key=f"opacity_{tab_key}")
-            st.markdown("---")
-            st.markdown('<div class="map-toolpanel-title">📐 Lưới toạ độ</div>', unsafe_allow_html=True)
-            show_grid = st.toggle("Bật lưới toạ độ", value=True, key=f"grid_on_{tab_key}")
-            grid_label = st.selectbox("Khoảng cách lưới", list(grid_step_map.keys()), index=0, key=f"grid_step_{tab_key}", disabled=not show_grid)
-            grid_step = grid_step_map[grid_label]
-        return basemap_style, show_xa, layer_opacity, show_grid, grid_step
-    else:
-        # Dự phòng cho phiên bản Streamlit cũ không có st.popover
-        with st.expander("🛠️ Công cụ bản đồ", expanded=False):
-            c1, c2, c3 = st.columns(3)
-            with c1: basemap_style = st.radio("Bản đồ nền:", list(MAP_BASEMAP_STYLES.keys()), index=0, key=f"basemap_{tab_key}")
-            with c2:
-                show_xa = st.toggle("Hiển thị lớp xã", value=show_xa_default, key=f"showxa_{tab_key}")
-                layer_opacity = st.slider("Độ mờ layer", 0.10, 1.00, 0.90, 0.05, key=f"opacity_{tab_key}")
-            with c3:
-                show_grid = st.toggle("Bật lưới toạ độ", value=True, key=f"grid_on_{tab_key}")
-                grid_label = st.selectbox("Khoảng cách lưới", list(grid_step_map.keys()), index=0, key=f"grid_step_{tab_key}", disabled=not show_grid)
-                grid_step = grid_step_map[grid_label]
-        return basemap_style, show_xa, layer_opacity, show_grid, grid_step
+GRID_STEP_OPTIONS = {"Tự động": None, "1°": 1, "0.5°": 0.5, "0.25°": 0.25}
 
 @st.fragment
-def _map_fragment(tab_key, var_groups, var_dict, period, month_idx, boundary_data, month_labels):
+def _map_fragment(tab_key, var_groups, var_dict, type_label, period, month_idx, boundary_data, month_labels):
     state_key = f"map_{tab_key}"
+    col_ctrl, col_map = st.columns([1, 2.4], gap="medium")
 
-    # v1.5.0 — Menu chọn biến THU GỌN THEO NHÓM (tham khảo mục "Chọn biến" của
-    # kichban.imh.ac.vn: Khí quyển > Nhiệt độ / Mưa - gió ...), thay cho 1 selectbox phẳng.
-    with st.expander("🧬 Chọn biến khí hậu (theo nhóm)", expanded=True):
-        group_names = list(var_groups.keys())
-        sel_group = st.radio("Nhóm biến:", group_names, horizontal=True, key=f"group_{tab_key}")
-        keys_in_group = var_groups[sel_group]
-        sel = st.selectbox("Biến trong nhóm:", keys_in_group, format_func=lambda k: var_dict[k]["label"], key=f"sel_{tab_key}")
+    with col_ctrl:
+        with st.container(border=True):
+            st.markdown(f'<div class="map-type-badge">{type_label}</div>', unsafe_allow_html=True)
 
-    basemap_style, show_xa, layer_opacity, show_grid, grid_step = render_map_control_panel(tab_key)
+            # ── 1) Chọn biến theo nhóm ──
+            st.markdown('<div class="panel-title">🧬 Biến hiển thị</div>', unsafe_allow_html=True)
+            group_names = list(var_groups.keys())
+            sel_group = st.selectbox("Nhóm biến", group_names, key=f"group_{tab_key}", label_visibility="collapsed")
+            keys_in_group = var_groups[sel_group]
+            sel = st.selectbox("Biến cụ thể", keys_in_group, format_func=lambda k: var_dict[k]["label"], key=f"sel_{tab_key}")
 
-    if st.button("🗺️ Vẽ bản đồ", key=f"btn_{tab_key}", type="primary"):
-        render_var_panel(sel, var_dict[sel], period, month_idx, boundary_data, month_labels, state_key, show_xa,
-                          basemap_style, layer_opacity, show_grid, grid_step)
-    display_panel(state_key)
+            st.markdown('<hr class="panel-sep">', unsafe_allow_html=True)
+
+            # ── 2) Tuỳ chọn hiển thị bản đồ ──
+            st.markdown('<div class="panel-title">🛠️ Tuỳ chọn bản đồ</div>', unsafe_allow_html=True)
+            basemap_style = st.selectbox("Nền bản đồ", list(MAP_BASEMAP_STYLES.keys()), key=f"basemap_{tab_key}")
+            show_xa = st.toggle("Hiển thị ranh giới xã", value=False, key=f"showxa_{tab_key}")
+            layer_opacity = st.slider("Độ mờ lớp nội suy", 0.10, 1.00, 0.90, 0.05, key=f"opacity_{tab_key}")
+            show_grid = st.toggle("Hiển thị lưới toạ độ", value=True, key=f"grid_on_{tab_key}")
+            grid_label = st.selectbox("Khoảng cách lưới", list(GRID_STEP_OPTIONS.keys()), key=f"grid_step_{tab_key}", disabled=not show_grid)
+            grid_step = GRID_STEP_OPTIONS[grid_label]
+
+            st.markdown('<hr class="panel-sep">', unsafe_allow_html=True)
+            draw_clicked = st.button("🗺️ Vẽ bản đồ", key=f"btn_{tab_key}", type="primary", use_container_width=True)
+
+    with col_map:
+        if draw_clicked:
+            render_var_panel(sel, var_dict[sel], period, month_idx, boundary_data, month_labels, state_key, show_xa,
+                              basemap_style, layer_opacity, show_grid, grid_step)
+        if st.session_state.get(state_key):
+            display_panel(state_key)
+        else:
+            st.markdown(
+                '<div class="map-placeholder"><div class="big">🗺️</div>'
+                '<div>Chọn biến khí hậu và bấm <b>"Vẽ bản đồ"</b> để hiển thị kết quả nội suy tại đây.</div></div>',
+                unsafe_allow_html=True,
+            )
+
 
 def _geom_to_xy_list(gdf):
     all_x, all_y = [], []
@@ -1719,19 +1742,30 @@ def page_du_bao():
     if not periods: st.error("❌ Không kết nối được server hoặc chưa có dữ liệu."); return
 
     periods_desc = list(reversed(periods)); yr_mo_labels = [f"{p[:4]}/{p[4:]}" for p in periods_desc]
-    col1, col2 = st.columns([2, 2])
-    with col1:
-        sel_idx = st.selectbox("📅 Kỳ dự báo:", range(len(periods_desc)), format_func=lambda i: yr_mo_labels[i], help="Tự động cập nhật khi server có thư mục mới")
-        sel_period = periods_desc[sel_idx]
 
-    yr, mo = int(sel_period[:4]), int(sel_period[4:])
-    month_labels = [f"Tháng {((mo + d - 1) % 12) + 1:02d}/{yr + (mo + d - 1) // 12}" for d in range(1, 4)]
-    with col2: month_idx = st.selectbox("🗓️ Hạn dự báo:", range(3), format_func=lambda i: month_labels[i])
+    # ── Thanh điều khiển chung: Kỳ dự báo / Hạn dự báo / Loại chuẩn sai ──
+    with st.container(border=True):
+        col1, col2, col3 = st.columns([1.3, 1.3, 1.6])
+        with col1:
+            sel_idx = st.selectbox("📅 Kỳ dự báo", range(len(periods_desc)), format_func=lambda i: yr_mo_labels[i], help="Tự động cập nhật khi server có thư mục mới")
+            sel_period = periods_desc[sel_idx]
 
-    st.markdown("---")
-    tab_c, tab_e = st.tabs(["🌡️ Chuẩn sai dự báo khí hậu", "⚠️ Chuẩn sai dự báo cực đoan"])
-    with tab_c: _map_fragment("c", CLIMATE_VAR_GROUPS, CLIMATE_VARS, sel_period, month_idx, boundary_data, month_labels)
-    with tab_e: _map_fragment("e", EXTREME_VAR_GROUPS, EXTREME_VARS, sel_period, month_idx, boundary_data, month_labels)
+        yr, mo = int(sel_period[:4]), int(sel_period[4:])
+        month_labels = [f"Tháng {((mo + d - 1) % 12) + 1:02d}/{yr + (mo + d - 1) // 12}" for d in range(1, 4)]
+        with col2:
+            month_idx = st.selectbox("🗓️ Hạn dự báo", range(3), format_func=lambda i: month_labels[i])
+        with col3:
+            map_type = st.selectbox("📊 Loại chuẩn sai", ["🌡️ Chuẩn sai dự báo khí hậu", "⚠️ Chuẩn sai dự báo cực đoan"])
+
+    st.markdown("<div style='height:6px;'></div>", unsafe_allow_html=True)
+
+    # v1.5.2 — Chỉ gọi 1 fragment tương ứng loại đang chọn (thay cho st.tabs bọc 2
+    # fragment song song trước đây), tránh hiện tượng UI bị lặp nội dung khi rerun.
+    if map_type.startswith("🌡️"):
+        _map_fragment("c", CLIMATE_VAR_GROUPS, CLIMATE_VARS, "🌡️ Chuẩn sai dự báo khí hậu", sel_period, month_idx, boundary_data, month_labels)
+    else:
+        _map_fragment("e", EXTREME_VAR_GROUPS, EXTREME_VARS, "⚠️ Chuẩn sai dự báo cực đoan", sel_period, month_idx, boundary_data, month_labels)
+
 
 def page_ban_tin_xa():
     st.markdown('<div class="module-header">📋 Bản tin cảnh báo rủi ro khí hậu</div>', unsafe_allow_html=True)
