@@ -11,6 +11,16 @@ THAY ĐỔI v1.3.9 – MODULE TỔNG QUAN:
   [NEW]  Header gồm logo Viện + tên Viện, bấm vào sẽ liên kết tới Cổng TTĐT
          Sở Khoa học và Công nghệ tỉnh Quảng Ninh
   [KEEP] Giữ nguyên toàn bộ code cấu trúc giao diện v1.3.4
+THAY ĐỔI v1.4.0 – GIAO DIỆN & MODULE GIỚI THIỆU:
+  [NEW]  Đổi tên module "Tổng quan" → "Giới thiệu"
+  [NEW]  Bổ sung mục "II. Mục tiêu, nội dung..." / "13. Mục tiêu của nhiệm vụ"
+         vào module Giới thiệu
+  [NEW]  Làm mới bảng màu giao diện (tông xanh biển đậm – phù hợp chủ đề
+         khí hậu/biển Quảng Ninh), áp dụng đồng bộ cho cả bản tin export HTML
+  [NEW]  Ẩn menu/nút "Deploy" mặc định của Streamlit ở góc màn hình
+  [NEW]  Logo Viện: nếu chưa có ảnh logo thật, hiển thị biểu trưng mặc định
+         (sóng biển + mặt trời) thay cho icon 🏛️ tạm thời
+  [KEEP] Giữ nguyên toàn bộ logic xử lý dữ liệu, bản đồ, rủi ro của v1.3.9
 """
 
 import streamlit as st
@@ -50,8 +60,14 @@ st.markdown("""
 <style>
     .block-container { padding-top: 0.5rem !important; padding-bottom: 1rem !important; }
     header[data-testid="stHeader"] { height: 0rem !important; min-height: 0rem !important; }
+    /* Ẩn menu ba gạch, nút "Deploy" và footer "Made with Streamlit" ở góc màn hình */
+    #MainMenu { visibility: hidden !important; }
+    footer { visibility: hidden !important; }
+    [data-testid="stToolbar"] { visibility: hidden !important; display: none !important; }
+    [data-testid="stDecoration"] { display: none !important; }
+    [data-testid="stStatusWidget"] { visibility: hidden !important; }
     .module-header {
-        background: linear-gradient(135deg, #1e3a5f 0%, #2d6a4f 100%);
+        background: linear-gradient(135deg, #073B4C 0%, #0F8B8D 100%);
         color: white; padding: 10px 20px; border-radius: 8px;
         font-size: 1.1rem; font-weight: bold; margin-top: 0; margin-bottom: 8px;
         display: flex; align-items: center; gap: 8px;
@@ -66,8 +82,8 @@ st.markdown("""
         background-color: #e8f4f8; border-radius: 6px 6px 0 0;
         padding: 8px 16px; font-weight: 600;
     }
-    .stTabs [aria-selected="true"] { background-color: #1e3a5f !important; color: white !important; }
-    [data-testid="stSidebar"] { background: linear-gradient(180deg, #1e3a5f 0%, #2d3748 100%); }
+    .stTabs [aria-selected="true"] { background-color: #073B4C !important; color: white !important; }
+    [data-testid="stSidebar"] { background: linear-gradient(180deg, #073B4C 0%, #0b2530 100%); }
     [data-testid="stSidebar"] * { color: #e2e8f0 !important; }
     [data-testid="stSidebar"] .block-container { padding-top: 1rem !important; }
     .risk-0 { background-color: #f0f0f0 !important; color: #555 !important; }
@@ -75,7 +91,7 @@ st.markdown("""
     .risk-2 { background-color: #fff176 !important; color: #7d6608 !important; font-weight: bold; }
     .risk-3 { background-color: #ff8a65 !important; color: #7d1f00 !important; font-weight: bold; }
     .commune-title {
-        background: linear-gradient(90deg, #1e3a5f, #2d6a4f);
+        background: linear-gradient(90deg, #073B4C, #0F8B8D);
         color: white; padding: 8px 16px; border-radius: 8px;
         font-size: 1.2rem; font-weight: bold; margin: 0 0 8px 0;
         text-align: center;
@@ -94,12 +110,25 @@ st.markdown("""
     }
     .org-header .org-logo-fallback {
         height: 48px; width: 48px; flex-shrink: 0; display: flex; align-items: center;
-        justify-content: center; font-size: 26px; background: #eef3f6; border-radius: 6px;
+        justify-content: center; background: #eef3f6; border-radius: 50%; overflow: hidden;
     }
+    .objective-card {
+        background: #ffffff; border: 1px solid #e2e8f0; border-left: 5px solid #0F8B8D;
+        border-radius: 10px; padding: 18px 22px; margin-bottom: 18px;
+    }
+    .objective-card h2 {
+        font-size: 1.02rem; color: #073B4C; margin: 0 0 6px 0; letter-spacing: 0.2px;
+    }
+    .objective-card h3 {
+        font-size: 1rem; color: #0F8B8D; margin: 0 0 10px 0; font-weight: 700;
+    }
+    .objective-list { margin: 0; padding-left: 22px; }
+    .objective-list li { margin-bottom: 10px; line-height: 1.55; font-size: 0.95rem; color: #2d3436; }
+    .objective-list li::marker { color: #0F8B8D; font-weight: bold; }
     .org-header .org-text a {
-        color: #1e3a5f; text-decoration: none; font-weight: 700; font-size: 1.05rem;
+        color: #073B4C; text-decoration: none; font-weight: 700; font-size: 1.05rem;
     }
-    .org-header .org-text a:hover { color: #2d6a4f; text-decoration: underline; }
+    .org-header .org-text a:hover { color: #0F8B8D; text-decoration: underline; }
     .org-header .org-sub { font-size: 0.78rem; color: #667085; margin-top: 2px; }
     .hero-banner {
         position: relative; border-radius: 14px; overflow: hidden; margin-bottom: 18px;
@@ -108,7 +137,7 @@ st.markdown("""
     }
     .hero-banner::before {
         content: ""; position: absolute; inset: 0;
-        background: linear-gradient(180deg, rgba(30,58,95,0.18) 0%, rgba(13,26,43,0.82) 100%);
+        background: linear-gradient(180deg, rgba(7,59,76,0.18) 0%, rgba(4,20,26,0.82) 100%);
     }
     .hero-content { position: relative; z-index: 1; padding: 26px 28px; color: #fff; }
     .hero-content h1 { margin: 0 0 8px 0; font-size: 1.65rem; line-height: 1.3; }
@@ -840,9 +869,9 @@ def render_xacsuat_table(xacsuat_data, month_labels):
         probs = xacsuat_data.get(lbl, {})
         t_vals = probs.get("T", (None, None, None)); r_vals = probs.get("R", (None, None, None))
         rows_T.extend([_fmt(v) for v in t_vals]); rows_R.extend([_fmt(v) for v in r_vals])
-    html = '<table style="border-collapse:collapse; width:100%; font-size:13px; font-family:Arial;"><thead><tr style="background:#1e3a5f; color:white; text-align:center;"><th rowspan="2" style="border:1px solid #aaa; padding:4px 8px; width:140px;">Tháng</th>'
+    html = '<table style="border-collapse:collapse; width:100%; font-size:13px; font-family:Arial;"><thead><tr style="background:#073B4C; color:white; text-align:center;"><th rowspan="2" style="border:1px solid #aaa; padding:4px 8px; width:140px;">Tháng</th>'
     for lbl in month_labels: html += f'<th colspan="3" style="border:1px solid #aaa; padding:4px 8px;">{lbl.replace("Tháng ","").split("/")[0]}</th>'
-    html += "</tr><tr style='background:#2d6a4f; color:white; text-align:center;'>"
+    html += "</tr><tr style='background:#0F8B8D; color:white; text-align:center;'>"
     for _ in month_labels: html += '<th style="border:1px solid #aaa; padding:4px 6px;">Thấp hơn<br><small>(XSHC)</small></th><th style="border:1px solid #aaa; padding:4px 6px;">Xấp xỉ<br><small>(XSCC)</small></th><th style="border:1px solid #aaa; padding:4px 6px;">Cao hơn<br><small>(XSVC)</small></th>'
     html += "</tr></thead><tbody>"
     for row_data, var_label in [(rows_T, "Nhiệt độ TB nhiều năm (%)"), (rows_R, "Lượng mưa TB nhiều năm (%)")]:
@@ -859,7 +888,7 @@ def render_risk_table(crop_name, decades, decade_risks, growth_stages=None, dise
         t = {0: "—", 1: "Thấp", 2: "TB", 3: "Cao"}.get(r, "—")
         return f'<td style="border:1px solid #ccc; padding:3px 6px; text-align:center; background:{c}; font-weight:bold; font-size:12px;">{t}</td>'
 
-    head_style = "border:1px solid #ccc; padding:4px 6px; text-align:center; background:#1e3a5f; color:white; font-size:12px;"
+    head_style = "border:1px solid #ccc; padding:4px 6px; text-align:center; background:#073B4C; color:white; font-size:12px;"
     row_style = "border:1px solid #ccc; padding:3px 8px; font-size:12px; background:#f8f9fa;"
     
     html = f'<table style="border-collapse:collapse; width:100%; margin-bottom:12px;"><thead><tr><th style="{head_style} width:180px;">Giai đoạn</th>'
@@ -1017,11 +1046,11 @@ def build_commune_map_figure(commune_name, gdf_xa_all):
         fig.add_trace(go.Scatter(x=all_x, y=all_y, mode="lines", line=dict(color="#cccccc", width=0.8), fill="toself", fillcolor="rgba(230,230,230,0.4)", hoverinfo="skip", showlegend=False))
     
     comm_x, comm_y = _geom_to_xy_list(gdf_commune)
-    fig.add_trace(go.Scatter(x=comm_x, y=comm_y, mode="lines", fill="toself", fillcolor="rgba(30,58,95,0.40)", line=dict(color="#1e3a5f", width=2.5), hoverinfo="skip", showlegend=False))
+    fig.add_trace(go.Scatter(x=comm_x, y=comm_y, mode="lines", fill="toself", fillcolor="rgba(7,59,76,0.40)", line=dict(color="#073B4C", width=2.5), hoverinfo="skip", showlegend=False))
 
     try:
         centroid = gdf_commune.geometry.unary_union.centroid
-        fig.add_trace(go.Scatter(x=[centroid.x], y=[centroid.y], mode="markers+text", text=[commune_name], textposition="top center", textfont=dict(size=11, color="#1e3a5f", family="Arial"), marker=dict(size=9, color="#e53935", symbol="circle"), hoverinfo="skip", showlegend=False))
+        fig.add_trace(go.Scatter(x=[centroid.x], y=[centroid.y], mode="markers+text", text=[commune_name], textposition="top center", textfont=dict(size=11, color="#073B4C", family="Arial"), marker=dict(size=9, color="#e53935", symbol="circle"), hoverinfo="skip", showlegend=False))
     except Exception: pass
 
     try:
@@ -1142,22 +1171,22 @@ def build_full_bulletin_html(commune_name, crops, period, month_labels, df_r, df
   * {{ box-sizing: border-box; }}
   body {{ font-family: "Segoe UI", Arial, sans-serif; margin: 0; padding: 0; background: #f4f6f8; color: #222; }}
   .page {{ max-width: 1100px; margin: 18px auto 60px auto; background: #fff; box-shadow: 0 2px 14px rgba(0,0,0,0.10); border-radius: 10px; overflow: hidden; }}
-  .doc-header {{ background: linear-gradient(135deg, #1e3a5f 0%, #2d6a4f 100%); color: #fff; padding: 22px 28px 18px 28px; }}
+  .doc-header {{ background: linear-gradient(135deg, #073B4C 0%, #0F8B8D 100%); color: #fff; padding: 22px 28px 18px 28px; }}
   .doc-header .org {{ font-size: 12.5px; opacity: 0.9; margin: 0 0 4px 0; }}
   .doc-header h1 {{ margin: 4px 0 6px 0; font-size: 1.5rem; }}
   .doc-header .meta {{ font-size: 12.5px; opacity: 0.9; }}
   .toolbar {{ display: flex; justify-content: flex-end; gap: 10px; padding: 12px 28px; background: #eef3f6; border-bottom: 1px solid #dbe3e8; }}
   .btn {{ border: none; border-radius: 6px; padding: 9px 18px; font-size: 13.5px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }}
-  .btn-print {{ background: #1e3a5f; color: #fff; }} .btn-print:hover {{ background: #16314f; }}
+  .btn-print {{ background: #073B4C; color: #fff; }} .btn-print:hover {{ background: #052a37; }}
   .content {{ padding: 24px 28px 10px 28px; }}
   .info-row {{ display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 18px; }}
   .info-card {{ flex: 1; min-width: 180px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; }}
   .info-card .label {{ font-size: 11.5px; color: #667085; margin-bottom: 2px; }}
-  .info-card .value {{ font-size: 14.5px; font-weight: 700; color: #1e3a5f; }}
+  .info-card .value {{ font-size: 14.5px; font-weight: 700; color: #073B4C; }}
   .two-col {{ display: flex; gap: 18px; margin-bottom: 22px; flex-wrap: nowrap; align-items: flex-start; }}
   .col-map {{ flex: 0 0 260px; width: 260px; display: flex; flex-direction: column; }}
   .col-chart {{ flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; }}
-  .section-title {{ font-size: 1rem; font-weight: 700; color: #1e3a5f; margin: 0 0 8px 0; display: flex; align-items: center; gap: 6px; }}
+  .section-title {{ font-size: 1rem; font-weight: 700; color: #073B4C; margin: 0 0 8px 0; display: flex; align-items: center; gap: 6px; }}
   .card {{ border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; background: #fcfdfe; }}
   .card-chart {{ border: 1px solid #e2e8f0; border-radius: 8px; padding: 6px; background: #fcfdfe; height: 314px; overflow: hidden; display: flex; align-items: center; justify-content: center; }}
   .card-chart > div {{ width: 100%; height: 100%; }}
@@ -1324,12 +1353,21 @@ def render_commune_bulletin(commune_name, crops, period, month_labels, df_r, df_
 # CÁC TRANG CHÍNH
 # ══════════════════════════════════════════════════════════════════════════════
 
-def page_tong_quan():
+def page_gioi_thieu():
     # ── Header: logo Viện + tên Viện liên kết tới Cổng TTĐT Sở KH&CN tỉnh Quảng Ninh ──
     if INSTITUTE_LOGO_URL:
         logo_html = f'<img src="{INSTITUTE_LOGO_URL}" alt="Logo Viện">'
     else:
-        logo_html = '<div class="org-logo-fallback">🏛️</div>'
+        # Biểu trưng mặc định (sóng biển + mặt trời) khi chưa có logo thật của Viện.
+        # Khi có logo chính thức, chỉ cần dán URL vào biến INSTITUTE_LOGO_URL ở đầu file.
+        logo_html = """<div class="org-logo-fallback">
+            <svg viewBox="0 0 48 48" width="30" height="30" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="24" cy="24" r="24" fill="#073B4C"/>
+                <circle cx="24" cy="15" r="5.5" fill="#FFD166"/>
+                <path d="M8 27c3-4 6-4 9 0s6 4 9 0 6-4 9 0" stroke="#ffffff" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+                <path d="M8 34c3-4 6-4 9 0s6 4 9 0 6-4 9 0" stroke="#ffffff" stroke-width="2.2" fill="none" stroke-linecap="round" opacity="0.65"/>
+            </svg>
+        </div>"""
     st.markdown(f"""
     <div class="org-header">
         {logo_html}
@@ -1347,6 +1385,19 @@ def page_tong_quan():
             <h1>🌾 Công cụ quản lý rủi ro khí hậu đối với cây trồng và vật nuôi tỉnh Quảng Ninh</h1>
             <p>Hệ thống hỗ trợ tạo <b>bản tin cảnh báo khí hậu</b> cho các xã tại Quảng Ninh, bao gồm đánh giá rủi ro cho <b>Lúa, Bắp cải, Súp lơ, Dưa chuột, Bí xanh, Lợn, Gà</b> theo từng kỳ tháng.</p>
         </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Mục tiêu của nhiệm vụ ──
+    st.markdown("""
+    <div class="objective-card">
+        <h2>II. MỤC TIÊU, NỘI DUNG VÀ PHƯƠNG ÁN TỔ CHỨC THỰC HIỆN NHIỆM VỤ</h2>
+        <h3>13. Mục tiêu của nhiệm vụ</h3>
+        <ul class="objective-list">
+            <li>Xác định được bộ chỉ số sinh khí hậu cây trồng (lúa, rau màu), vật nuôi (gà, lợn) và sâu dịch hại, dịch bệnh trên địa bàn tỉnh Quảng Ninh phục vụ đánh giá rủi ro, giám sát, cảnh báo và dự báo rủi ro khí hậu.</li>
+            <li>Đánh giá được hiện trạng rủi ro khí hậu và theo kịch bản biến đổi khí hậu đối với cây trồng (lúa, rau màu) và vật nuôi (gà, lợn), cũng như nguy cơ sâu dịch hại và dịch bệnh trên địa bàn tỉnh Quảng Ninh.</li>
+            <li>Xây dựng được công cụ quản lý rủi ro và mô hình dự báo sớm rủi ro khí hậu, sâu dịch hại và dịch bệnh đối với cây trồng (lúa, rau màu) và vật nuôi (gà, lợn) trên địa bàn tỉnh Quảng Ninh.</li>
+        </ul>
     </div>
     """, unsafe_allow_html=True)
 
@@ -1438,10 +1489,10 @@ def page_phan_hoi():
 # ══════════════════════════════════════════════════════════════════════════════
 with st.sidebar:
     st.markdown("## 🌾 Bản tin Khí hậu\n**Quảng Ninh – Nông nghiệp**\n---")
-    menu = st.radio("📌 Chọn module:", ["🏠 Tổng quan", "🔄 Dự báo khí hậu mùa", "📋 Bản tin cảnh báo rủi ro khí hậu", "💾 Bản tin đã lưu", "📤 Export bản tin", "💬 Phản hồi"], label_visibility="collapsed")
-    st.markdown("---\nPhòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu\nViện Khoa học Khí tượng Thủy văn Môi trường và Biển\n---\n*Phiên bản 1.3.9 – 06/2026*")
+    menu = st.radio("📌 Chọn module:", ["📖 Giới thiệu", "🔄 Dự báo khí hậu mùa", "📋 Bản tin cảnh báo rủi ro khí hậu", "💾 Bản tin đã lưu", "📤 Export bản tin", "💬 Phản hồi"], label_visibility="collapsed")
+    st.markdown("---\nPhòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu\nViện Khoa học Khí tượng Thủy văn Môi trường và Biển\n---\n*Phiên bản 1.4.0 – 07/2026*")
 
-if   menu == "🏠 Tổng quan":                        page_tong_quan()
+if   menu == "📖 Giới thiệu":                        page_gioi_thieu()
 elif menu == "🔄 Dự báo khí hậu mùa":                page_du_bao()
 elif menu == "📋 Bản tin cảnh báo rủi ro khí hậu":   page_ban_tin_xa()
 elif menu == "💾 Bản tin đã lưu":                      page_ban_tin_da_luu()
