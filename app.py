@@ -1522,8 +1522,7 @@ def page_gioi_thieu():
     # ── Mục tiêu của nhiệm vụ ──
     st.markdown("""
     <div class="objective-card">
-        <h2>II. MỤC TIÊU, NỘI DUNG VÀ PHƯƠNG ÁN TỔ CHỨC THỰC HIỆN NHIỆM VỤ</h2>
-        <h3>13. Mục tiêu của nhiệm vụ</h3>
+                <h3> Mục tiêu </h3>
         <ul class="objective-list">
             <li>Xác định được bộ chỉ số sinh khí hậu cây trồng (lúa, rau màu), vật nuôi (gà, lợn) và sâu dịch hại, dịch bệnh trên địa bàn tỉnh Quảng Ninh phục vụ đánh giá rủi ro, giám sát, cảnh báo và dự báo rủi ro khí hậu.</li>
             <li>Đánh giá được hiện trạng rủi ro khí hậu và theo kịch bản biến đổi khí hậu đối với cây trồng (lúa, rau màu) và vật nuôi (gà, lợn), cũng như nguy cơ sâu dịch hại và dịch bệnh trên địa bàn tỉnh Quảng Ninh.</li>
