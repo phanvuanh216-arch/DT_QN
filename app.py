@@ -24,6 +24,11 @@ THAY ĐỔI v1.4.0 – GIAO DIỆN & MODULE GIỚI THIỆU:
 THAY ĐỔI v1.4.1 – GIAO DIỆN:
   [NEW]  Đổi icon thu gọn/mở rộng sidebar (mũi tên "<<" / ">>") thành ô vuông
          có 3 gạch ngang (hamburger icon) đồng bộ tông màu xanh biển đậm
+THAY ĐỔI v1.4.2 – SỬA LỖI GIAO DIỆN:
+  [FIX]  Thêm nút thu gọn/mở rộng sidebar DỰ PHÒNG (độc lập với DOM gốc của
+         Streamlit) để khắc phục trường hợp sidebar bị ẩn nhưng không bấm
+         mở lại được do nút gốc "collapsedControl" không nhận đúng CSS/JS
+         ở một số phiên bản trình duyệt/Streamlit.
 """
 
 import streamlit as st
@@ -210,6 +215,66 @@ st.markdown("""
     .hero-content p { margin: 0; font-size: 0.96rem; opacity: 0.95; max-width: 760px; }
 </style>
 """, unsafe_allow_html=True)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# FIX v1.4.2: NÚT MỞ/ĐÓNG SIDEBAR DỰ PHÒNG
+#   Vấn đề: ở một số phiên bản trình duyệt/Streamlit, nút gốc
+#   [data-testid="collapsedControl"] không nhận đúng CSS position:fixed ở trên
+#   (thường do một phần tử cha có transform/overflow tạo containing-block mới),
+#   khiến khi sidebar bị thu gọn thì KHÔNG còn cách nào bấm mở lại được.
+#
+#   Giải pháp: chèn một nút hamburger ĐỘC LẬP thẳng vào document cha (ngoài
+#   iframe) bằng components.html. Nút này:
+#     1) Ưu tiên tìm và bấm hộ nút gốc của Streamlit (đóng/mở đúng chuẩn).
+#     2) Nếu không tìm thấy nút gốc (do đổi tên testid ở phiên bản mới), tự
+#        ẩn/hiện sidebar bằng cách gán style.display trực tiếp.
+#   Nút được tự chèn lại mỗi giây để không bị Streamlit rerender xoá mất.
+# ══════════════════════════════════════════════════════════════════════════════
+components.html("""
+<script>
+(function() {
+    const doc = window.parent.document;
+
+    function findToggleButton() {
+        return doc.querySelector('[data-testid="stSidebarCollapseButton"] button')
+            || doc.querySelector('[data-testid="collapsedControl"] button')
+            || doc.querySelector('[data-testid="collapsedControl"]')
+            || doc.querySelector('[data-testid="stSidebarHeader"] button');
+    }
+
+    function toggleSidebar() {
+        const btn = findToggleButton();
+        if (btn) { btn.click(); return; }
+        // Dự phòng: nếu không tìm thấy nút gốc của Streamlit, tự ẩn/hiện bằng CSS
+        const sidebar = doc.querySelector('[data-testid="stSidebar"]');
+        if (sidebar) {
+            const isHidden = sidebar.style.display === 'none';
+            sidebar.style.display = isHidden ? '' : 'none';
+        }
+    }
+
+    function ensureCustomButton() {
+        if (doc.getElementById('custom-sidebar-toggle')) return;
+        const b = doc.createElement('button');
+        b.id = 'custom-sidebar-toggle';
+        b.title = 'Ẩn / hiện menu';
+        b.style.cssText = `
+            position: fixed; top: 0.6rem; left: 0.6rem; z-index: 2147483647;
+            background: linear-gradient(135deg, #073B4C 0%, #0F8B8D 100%);
+            border-radius: 6px; width: 34px; height: 34px; border: none;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.25); cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+        `;
+        b.innerHTML = '<span style="display:block;width:16px;height:2px;background:#fff;box-shadow:0 -5px 0 #fff,0 5px 0 #fff;"></span>';
+        b.onclick = toggleSidebar;
+        doc.body.appendChild(b);
+    }
+
+    ensureCustomButton();
+    setInterval(ensureCustomButton, 1000);
+})();
+</script>
+""", height=0)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1556,7 +1621,7 @@ def page_phan_hoi():
 with st.sidebar:
     st.markdown("## 🌾 Bản tin Khí hậu\n**Quảng Ninh – Nông nghiệp**\n---")
     menu = st.radio("📌 Chọn module:", ["📖 Giới thiệu", "🔄 Dự báo khí hậu mùa", "📋 Bản tin cảnh báo rủi ro khí hậu", "💾 Bản tin đã lưu", "📤 Export bản tin", "💬 Phản hồi"], label_visibility="collapsed")
-    st.markdown("---\nPhòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu\nViện Khoa học Khí tượng Thủy văn Môi trường và Biển\n---\n*Phiên bản 1.4.0 – 07/2026*")
+    st.markdown("---\nPhòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu\nViện Khoa học Khí tượng Thủy văn Môi trường và Biển\n---\n*Phiên bản 1.4.2 – 07/2026*")
 
 if   menu == "📖 Giới thiệu":                        page_gioi_thieu()
 elif menu == "🔄 Dự báo khí hậu mùa":                page_du_bao()
