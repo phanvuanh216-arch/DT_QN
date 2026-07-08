@@ -71,10 +71,13 @@ st.markdown("""
     [data-testid="stStatusWidget"] { visibility: hidden !important; }
 
     /* ── Đổi icon thu gọn/mở rộng sidebar (mũi tên "<<" / ">>") thành ô vuông 3 gạch ──
-       Dùng position:fixed để nút KHÔNG bị ẩn theo header (đã set height:0 ở trên) */
-    [data-testid="collapsedControl"],
-    [data-testid="stSidebarCollapseButton"],
-    button[kind="header"] {
+       CHỈ ghim position:fixed cho nút MỞ LẠI (collapsedControl) vì nút này nằm ngoài
+       sidebar và bị kẹt do header đã set height:0 ở trên. Nút ĐÓNG (nằm sẵn trong
+       sidebar) giữ nguyên vị trí mặc định của Streamlit — chỉ đổi giao diện, không
+       đổi position/layout, để không phá vùng bấm (nguyên nhân gây lỗi "không mở lại được"). */
+
+    /* --- Nút MỞ LẠI sidebar (hiện khi sidebar đang thu gọn) --- */
+    [data-testid="collapsedControl"] {
         position: fixed !important;
         top: 0.6rem !important;
         left: 0.6rem !important;
@@ -93,28 +96,40 @@ st.markdown("""
         opacity: 1 !important;
         visibility: visible !important;
     }
-    /* Khi sidebar đang mở, nút nằm bên trong sidebar -> đặt lại vị trí theo sidebar */
-    [data-testid="stSidebar"][aria-expanded="true"] [data-testid="stSidebarCollapseButton"],
-    [data-testid="stSidebar"][aria-expanded="true"] button[kind="header"] {
-        position: absolute !important;
-        top: 0.6rem !important;
-        left: auto !important;
-        right: 0.6rem !important;
-    }
-    [data-testid="collapsedControl"] svg,
-    [data-testid="stSidebarCollapseButton"] svg,
-    button[kind="header"] svg {
-        display: none !important;
-    }
-    [data-testid="collapsedControl"]::before,
-    [data-testid="stSidebarCollapseButton"]::before,
-    button[kind="header"]::before {
+    [data-testid="collapsedControl"] svg { display: none !important; }
+    [data-testid="collapsedControl"]::before {
         content: "";
         display: block;
         width: 16px;
         height: 2px;
         background: #ffffff;
         box-shadow: 0 -5px 0 #ffffff, 0 5px 0 #ffffff;
+        pointer-events: none;
+    }
+
+    /* --- Nút ĐÓNG sidebar (nằm sẵn bên trong sidebar khi đang mở) ---
+       Chỉ đổi màu/hình dạng, KHÔNG đổi position để giữ nguyên khả năng bấm */
+    [data-testid="stSidebarCollapseButton"] button,
+    [data-testid="stSidebarHeader"] button {
+        background: linear-gradient(135deg, #073B4C 0%, #0F8B8D 100%) !important;
+        border-radius: 6px !important;
+        width: 34px !important;
+        height: 34px !important;
+    }
+    [data-testid="stSidebarCollapseButton"] svg,
+    [data-testid="stSidebarHeader"] button svg {
+        display: none !important;
+    }
+    [data-testid="stSidebarCollapseButton"]::before,
+    [data-testid="stSidebarHeader"] button::before {
+        content: "";
+        display: block;
+        width: 16px;
+        height: 2px;
+        background: #ffffff;
+        box-shadow: 0 -5px 0 #ffffff, 0 5px 0 #ffffff;
+        pointer-events: none;
+        margin: 0 auto;
     }
 
     .module-header {
