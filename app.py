@@ -29,6 +29,15 @@ THAY ĐỔI v1.4.2 – SỬA LỖI GIAO DIỆN:
          Streamlit) để khắc phục trường hợp sidebar bị ẩn nhưng không bấm
          mở lại được do nút gốc "collapsedControl" không nhận đúng CSS/JS
          ở một số phiên bản trình duyệt/Streamlit.
+THAY ĐỔI v1.5.0 – ÁP DỤNG THAM KHẢO GIAO DIỆN kichban.imh.ac.vn:
+  [NEW]  Thanh menu ngang trên cùng (Trang chủ / Giới thiệu / Liên hệ)
+  [NEW]  Menu chọn biến khí hậu thu gọn theo NHÓM (Nhiệt độ / Mưa - gió...)
+         thay cho danh sách phẳng, có thể thu gọn/mở rộng từng nhóm
+  [NEW]  Bảng điều khiển bản đồ dạng popover: chọn nền bản đồ, độ mờ lớp
+         nội suy, bật/tắt + tuỳ chỉnh lưới toạ độ
+  [NEW]  Hộp thoại "Xuất bản đồ / bản tin chất lượng cao": khổ giấy (A4/A3),
+         độ phân giải (DPI), có/không chèn logo cơ quan
+  [KEEP] Giữ nguyên toàn bộ code, cấu trúc, logic xử lý dữ liệu của v1.4.2
 """
 
 import streamlit as st
@@ -213,6 +222,25 @@ st.markdown("""
     .hero-content { position: relative; z-index: 1; padding: 26px 28px; color: #fff; }
     .hero-content h1 { margin: 0 0 8px 0; font-size: 1.65rem; line-height: 1.3; }
     .hero-content p { margin: 0; font-size: 0.96rem; opacity: 0.95; max-width: 760px; }
+
+    /* ══════════ v1.5.0 – Thanh menu ngang trên cùng (tham khảo kichban.imh.ac.vn) ══════════ */
+    .topnav-bar {
+        display: flex; align-items: center; justify-content: flex-end; gap: 4px;
+        background: #052a37; padding: 6px 18px; border-radius: 8px; margin-bottom: 10px;
+        flex-wrap: wrap;
+    }
+    .topnav-bar a {
+        color: #cfe8ec !important; text-decoration: none !important; font-size: 0.86rem;
+        padding: 6px 12px; border-radius: 5px; font-weight: 600; transition: background 0.15s;
+    }
+    .topnav-bar a:hover { background: rgba(255,255,255,0.12); color: #ffffff !important; }
+    .topnav-bar a.active { background: #0F8B8D; color: #ffffff !important; }
+
+    /* ══════════ v1.5.0 – Bảng điều khiển bản đồ / hộp thoại export ══════════ */
+    .map-toolpanel-title {
+        font-size: 0.95rem; font-weight: 700; color: #073B4C; margin-bottom: 4px;
+        display: flex; align-items: center; gap: 6px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -314,6 +342,17 @@ EXTREME_VARS = {
     "ano.SU37":   {"label": "Số ngày nắng nóng ≥37°C (SU37)", "unit": "ngày", "cmap": "RdYlBu_r", "levels": list(range(-8, 10, 2))},
     "ano.SU39":   {"label": "Số ngày nắng nóng ≥39°C (SU39)", "unit": "ngày", "cmap": "RdYlBu_r", "levels": list(range(-6, 8, 2))},
     "ano.Evap":   {"label": "Bốc hơi (Evap)",                 "unit": "mm",   "cmap": "BrBG",     "levels": [-100,-50,-25,-10,0,10,25,50,100]},
+}
+
+# v1.5.0 — Gom nhóm biến (tham khảo cấu trúc "Chọn biến" của kichban.imh.ac.vn:
+# Khí quyển > Nhiệt độ / Mưa - gió ...). Dùng để dựng menu thu gọn theo nhóm.
+CLIMATE_VAR_GROUPS = {
+    "🌡️ Nhiệt độ": ["ano.T2m", "ano.Tx", "ano.Tm"],
+    "🌧️ Mưa - Ẩm":  ["ano.R", "ano.RH2m"],
+}
+EXTREME_VAR_GROUPS = {
+    "🌡️ Nhiệt độ cực đoan": ["ano.FD13", "ano.FD15", "ano.SU35", "ano.SU37", "ano.SU39"],
+    "🌧️ Mưa - Khô hạn":     ["ano.CDD", "ano.CWD", "ano.Rx1day", "ano.Rx5day", "ano.Evap"],
 }
 
 # Tách riêng đối tượng rau trong các xã
@@ -1089,7 +1128,19 @@ def _mpl_to_plotly(cmap_name, n=128):
     pos = np.linspace(0, 1, n)
     return [[p, f"rgb({int(r*255)},{int(g*255)},{int(b*255)})"] for p, (r, g, b, _) in zip(pos, [cmap(v) for v in pos])]
 
-def build_figure(lons, lats, vals, meta, title, boundary_data, show_xa):
+# v1.5.0 — Bảng màu "nền bản đồ" mô phỏng (đổi tông nền + màu ranh giới của khung vẽ,
+# tương tự lựa chọn "Bản đồ nền: Mặc định / Google địa hình / ESRI Vệ tinh / ESRI Đường phố"
+# của kichban.imh.ac.vn — do môi trường không gọi được basemap tile ngoài, ta mô phỏng
+# bằng cách đổi màu nền + màu viền cho phù hợp phong cách từng loại nền).
+MAP_BASEMAP_STYLES = {
+    "Mặc định":        {"bg": "#ffffff", "border": "#111111", "grid": "rgba(180,180,180,0.35)"},
+    "Địa hình":        {"bg": "#f3ecd9", "border": "#5b4636", "grid": "rgba(120,100,70,0.30)"},
+    "Vệ tinh (mô phỏng)": {"bg": "#0b2530", "border": "#ffffff", "grid": "rgba(255,255,255,0.20)"},
+    "Đường phố (mô phỏng)": {"bg": "#eef1f3", "border": "#333333", "grid": "rgba(80,80,80,0.25)"},
+}
+
+def build_figure(lons, lats, vals, meta, title, boundary_data, show_xa,
+                  basemap_style="Mặc định", layer_opacity=0.90, show_grid=True, grid_step=None):
     bounds = boundary_data.get("bounds", (106.3, 20.6, 108.3, 21.8))
     minx, miny, maxx, maxy = bounds
     ok = ((lons >= minx - 1.5) & (lons <= maxx + 1.5) & (lats >= miny - 1.5) & (lats <= maxy + 1.5))
@@ -1098,6 +1149,7 @@ def build_figure(lons, lats, vals, meta, title, boundary_data, show_xa):
 
     gx_vec, gy_vec, gv_masked = _compute_grid(tuple(xi.tolist()), tuple(yi.tolist()), tuple(zi.tolist()), float(minx), float(miny), float(maxx), float(maxy), boundary_data.get("mask_wkt", ""))
     levels = sorted(meta.get("levels", list(range(-5, 6))))
+    style = MAP_BASEMAP_STYLES.get(basemap_style, MAP_BASEMAP_STYLES["Mặc định"])
     fig = go.Figure()
 
     if "tinh_x" in boundary_data:
@@ -1108,35 +1160,45 @@ def build_figure(lons, lats, vals, meta, title, boundary_data, show_xa):
         colorscale=_mpl_to_plotly(meta.get("cmap", "RdBu_r")), zmin=levels[0], zmax=levels[-1], autocontour=False,
         contours=dict(start=levels[0], end=levels[-1], size=float(np.min(np.diff(levels))) if len(levels)>1 else 1.0, coloring="fill", showlines=False),
         colorbar=dict(title=dict(text=f"Chuẩn sai ({meta.get('unit', '')})", side="right", font=dict(size=12, family="Arial")), tickvals=levels, ticktext=[str(v) for v in levels], tickfont=dict(size=10), thickness=16, len=0.75, outlinewidth=1, outlinecolor="#aaa"),
-        opacity=0.90, hovertemplate=f"Lon: %{{x:.3f}}°E<br>Lat: %{{y:.3f}}°N<br>Giá trị: %{{z:.2f}} {meta.get('unit', '')}<extra></extra>", name="Nội suy", showscale=True,
+        opacity=layer_opacity, hovertemplate=f"Lon: %{{x:.3f}}°E<br>Lat: %{{y:.3f}}°N<br>Giá trị: %{{z:.2f}} {meta.get('unit', '')}<extra></extra>", name="Nội suy", showscale=True,
     ))
 
     if "qn_x" in boundary_data:
-        fig.add_trace(go.Scattergl(x=boundary_data["qn_x"], y=boundary_data["qn_y"], mode="lines", line=dict(color="#111111", width=2.2), hoverinfo="skip", name="Ranh giới Quảng Ninh"))
+        fig.add_trace(go.Scattergl(x=boundary_data["qn_x"], y=boundary_data["qn_y"], mode="lines", line=dict(color=style["border"], width=2.2), hoverinfo="skip", name="Ranh giới Quảng Ninh"))
     
     xa_visible = True if show_xa else "legendonly"
     if "xa_x" in boundary_data:
         fig.add_trace(go.Scattergl(x=boundary_data["xa_x"], y=boundary_data["xa_y"], mode="lines", line=dict(color="#e07b00", width=1.1, dash="dot"), hoverinfo="skip", visible=xa_visible, name="Ranh giới xã", legendgroup="xa_border"))
     if "xa_lx" in boundary_data and boundary_data["xa_texts"]:
-        fig.add_trace(go.Scatter(x=boundary_data["xa_lx"], y=boundary_data["xa_ly"], mode="text", text=boundary_data["xa_texts"], textfont=dict(size=9, color="#111111"), textposition="middle center", hoverinfo="skip", visible=xa_visible, name="Tên xã", legendgroup="xa_label"))
+        label_color = "#ffffff" if basemap_style == "Vệ tinh (mô phỏng)" else "#111111"
+        fig.add_trace(go.Scatter(x=boundary_data["xa_lx"], y=boundary_data["xa_ly"], mode="text", text=boundary_data["xa_texts"], textfont=dict(size=9, color=label_color), textposition="middle center", hoverinfo="skip", visible=xa_visible, name="Tên xã", legendgroup="xa_label"))
+
+    # v1.5.0 — Lưới toạ độ: bật/tắt + khoảng cách lưới (dtick) tuỳ chọn, tham khảo
+    # mục "Lưới tọa độ / Khoảng cách: Tự động, 30°, 10°, 5°, 1°" của kichban.imh.ac.vn
+    xaxis_kwargs = dict(title="Kinh độ (°E)", range=[minx-0.12, maxx+0.12], fixedrange=True, scaleanchor="y", scaleratio=1, constrain="domain", showgrid=show_grid, gridcolor=style["grid"])
+    yaxis_kwargs = dict(title="Vĩ độ (°N)", range=[miny-0.12, maxy+0.12], fixedrange=True, showgrid=show_grid, gridcolor=style["grid"])
+    if show_grid and grid_step:
+        xaxis_kwargs["dtick"] = grid_step
+        yaxis_kwargs["dtick"] = grid_step
 
     fig.update_layout(
         title=dict(text=title, font=dict(size=14, family="Arial"), x=0.5, xanchor="center"),
-        xaxis=dict(title="Kinh độ (°E)", range=[minx-0.12, maxx+0.12], fixedrange=True, scaleanchor="y", scaleratio=1, constrain="domain", showgrid=True, gridcolor="rgba(180,180,180,0.3)"),
-        yaxis=dict(title="Vĩ độ (°N)", range=[miny-0.12, maxy+0.12], fixedrange=True, showgrid=True, gridcolor="rgba(180,180,180,0.3)"),
+        xaxis=xaxis_kwargs,
+        yaxis=yaxis_kwargs,
         legend=dict(x=0.01, y=0.01, bgcolor="rgba(255,255,255,0.85)", bordercolor="#aaa", borderwidth=1, font=dict(size=10)),
-        margin=dict(l=60, r=20, t=50, b=50), height=680, plot_bgcolor="white", paper_bgcolor="white", hovermode="closest", dragmode=False,
+        margin=dict(l=60, r=20, t=50, b=50), height=680, plot_bgcolor=style["bg"], paper_bgcolor=style["bg"], hovermode="closest", dragmode=False,
         modebar_remove=["zoom","pan","zoomIn2d","zoomOut2d","resetScale2d","lasso2d","select2d","autoScale2d","hoverClosestCartesian","hoverCompareCartesian","toggleSpikelines"],
     )
     return fig, None
 
-def render_var_panel(var_prefix, meta, period, month_idx, boundary_data, month_labels, state_key, show_xa):
+def render_var_panel(var_prefix, meta, period, month_idx, boundary_data, month_labels, state_key, show_xa,
+                      basemap_style="Mặc định", layer_opacity=0.90, show_grid=True, grid_step=None):
     with st.spinner(f"⏳ Đang tải {meta['label']} …"): nc_bytes = download_nc(period, var_prefix)
     if not nc_bytes: st.session_state[state_key] = {"error": f"Không tải được file NC: {var_prefix}.{period}.nc"}; return
     with st.spinner("🔄 Đang đọc dữ liệu …"): lons, lats, vals, err = load_nc_data(nc_bytes, month_idx)
     if err: st.session_state[state_key] = {"error": f"Lỗi đọc dữ liệu: {err}"}; return
     title = f"Chuẩn sai {meta['label']} – {month_labels[month_idx] if month_idx < len(month_labels) else f'Tháng +{month_idx+1}'} (Kỳ {period[:4]}/{period[4:]})"
-    with st.spinner("🗺️ Đang nội suy và vẽ bản đồ …"): fig, err2 = build_figure(lons, lats, vals, meta, title, boundary_data, show_xa)
+    with st.spinner("🗺️ Đang nội suy và vẽ bản đồ …"): fig, err2 = build_figure(lons, lats, vals, meta, title, boundary_data, show_xa, basemap_style, layer_opacity, show_grid, grid_step)
     if err2: st.session_state[state_key] = {"error": err2}; return
     st.session_state[state_key] = {"fig": fig, "filename": f"chuan_sai_{var_prefix.replace('.','_')}_{period}_t{month_idx+1}.png", "error": None}
 
@@ -1147,11 +1209,64 @@ def display_panel(state_key):
     st.plotly_chart(result["fig"], use_container_width=True, config={"scrollZoom": False, "displayModeBar": True, "modeBarButtonsToRemove": ["zoom2d","pan2d","zoomIn2d","zoomOut2d","autoScale2d","resetScale2d","lasso2d","select2d"], "toImageButtonOptions": {"format": "png", "filename": result["filename"], "scale": 2}})
     st.caption("💡 Hover vào bản đồ để xem giá trị. Bấm legend để ẩn/hiện lớp xã.")
 
+# ══════════════════════════════════════════════════════════════════════════════
+# v1.5.0 — BẢNG ĐIỀU KHIỂN BẢN ĐỒ (tham khảo "Công cụ bản đồ" của kichban.imh.ac.vn:
+# Bản đồ nền / Các lớp hiển thị / Độ mờ layer / Lưới toạ độ)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def render_map_control_panel(tab_key, show_xa_default=False):
+    """
+    Trả về (basemap_style, show_xa, layer_opacity, show_grid, grid_step).
+    Hiển thị dạng popover gọn (giống hộp thoại nổi "Công cụ bản đồ" của kichban.imh.ac.vn).
+    """
+    panel_fn = st.popover if hasattr(st, "popover") else None
+    grid_step_map = {"Tự động": None, "1°": 1, "0.5°": 0.5, "0.25°": 0.25}
+
+    if panel_fn:
+        with panel_fn("🛠️ Công cụ bản đồ", use_container_width=False):
+            st.markdown('<div class="map-toolpanel-title">🗺️ Bản đồ nền</div>', unsafe_allow_html=True)
+            basemap_style = st.radio("Nền:", list(MAP_BASEMAP_STYLES.keys()), index=0, key=f"basemap_{tab_key}", label_visibility="collapsed")
+            st.markdown("---")
+            st.markdown('<div class="map-toolpanel-title">📑 Các lớp hiển thị</div>', unsafe_allow_html=True)
+            show_xa = st.toggle("Hiển thị lớp xã", value=show_xa_default, key=f"showxa_{tab_key}")
+            layer_opacity = st.slider("Độ mờ layer nội suy", 0.10, 1.00, 0.90, 0.05, key=f"opacity_{tab_key}")
+            st.markdown("---")
+            st.markdown('<div class="map-toolpanel-title">📐 Lưới toạ độ</div>', unsafe_allow_html=True)
+            show_grid = st.toggle("Bật lưới toạ độ", value=True, key=f"grid_on_{tab_key}")
+            grid_label = st.selectbox("Khoảng cách lưới", list(grid_step_map.keys()), index=0, key=f"grid_step_{tab_key}", disabled=not show_grid)
+            grid_step = grid_step_map[grid_label]
+        return basemap_style, show_xa, layer_opacity, show_grid, grid_step
+    else:
+        # Dự phòng cho phiên bản Streamlit cũ không có st.popover
+        with st.expander("🛠️ Công cụ bản đồ", expanded=False):
+            c1, c2, c3 = st.columns(3)
+            with c1: basemap_style = st.radio("Bản đồ nền:", list(MAP_BASEMAP_STYLES.keys()), index=0, key=f"basemap_{tab_key}")
+            with c2:
+                show_xa = st.toggle("Hiển thị lớp xã", value=show_xa_default, key=f"showxa_{tab_key}")
+                layer_opacity = st.slider("Độ mờ layer", 0.10, 1.00, 0.90, 0.05, key=f"opacity_{tab_key}")
+            with c3:
+                show_grid = st.toggle("Bật lưới toạ độ", value=True, key=f"grid_on_{tab_key}")
+                grid_label = st.selectbox("Khoảng cách lưới", list(grid_step_map.keys()), index=0, key=f"grid_step_{tab_key}", disabled=not show_grid)
+                grid_step = grid_step_map[grid_label]
+        return basemap_style, show_xa, layer_opacity, show_grid, grid_step
+
 @st.fragment
-def _map_fragment(tab_key, var_dict, period, month_idx, boundary_data, month_labels, show_xa):
+def _map_fragment(tab_key, var_groups, var_dict, period, month_idx, boundary_data, month_labels):
     state_key = f"map_{tab_key}"
-    sel = st.selectbox("Chọn biến:", list(var_dict.keys()), format_func=lambda k: var_dict[k]["label"], key=f"sel_{tab_key}")
-    if st.button("🗺️ Vẽ bản đồ", key=f"btn_{tab_key}", type="primary"): render_var_panel(sel, var_dict[sel], period, month_idx, boundary_data, month_labels, state_key, show_xa)
+
+    # v1.5.0 — Menu chọn biến THU GỌN THEO NHÓM (tham khảo mục "Chọn biến" của
+    # kichban.imh.ac.vn: Khí quyển > Nhiệt độ / Mưa - gió ...), thay cho 1 selectbox phẳng.
+    with st.expander("🧬 Chọn biến khí hậu (theo nhóm)", expanded=True):
+        group_names = list(var_groups.keys())
+        sel_group = st.radio("Nhóm biến:", group_names, horizontal=True, key=f"group_{tab_key}")
+        keys_in_group = var_groups[sel_group]
+        sel = st.selectbox("Biến trong nhóm:", keys_in_group, format_func=lambda k: var_dict[k]["label"], key=f"sel_{tab_key}")
+
+    basemap_style, show_xa, layer_opacity, show_grid, grid_step = render_map_control_panel(tab_key)
+
+    if st.button("🗺️ Vẽ bản đồ", key=f"btn_{tab_key}", type="primary"):
+        render_var_panel(sel, var_dict[sel], period, month_idx, boundary_data, month_labels, state_key, show_xa,
+                          basemap_style, layer_opacity, show_grid, grid_step)
     display_panel(state_key)
 
 def _geom_to_xy_list(gdf):
@@ -1215,7 +1330,13 @@ def _fig_to_html_div(fig, div_id, export_height=None, export_width=None):
         return f"{m.group(1)}<script>(function() {{ function __renderWhenReady() {{ if (window.Plotly) {{ {m.group(2)} }} else {{ setTimeout(__renderWhenReady, 50); }} }} __renderWhenReady(); }})(); </script>{m.group(3)}"
     except Exception: return ""
 
-def build_full_bulletin_html(commune_name, crops, period, month_labels, df_r, df_t, df_decadal, xacsuat_data, gdf_xa, active_decades, decade_risks, start_m, end_m, yr, mo):
+# v1.5.0 — Thông số khổ giấy cho hộp thoại "Xuất bản tin chất lượng cao"
+# (tham khảo hộp thoại "Xuất bản đồ chất lượng cao" của kichban.imh.ac.vn:
+#  Khổ giấy A4/A3, Độ phân giải DPI, Logo cơ quan)
+EXPORT_PAPER_SIZES_MM = {"A4": (210, 297), "A3": (297, 420)}
+
+def build_full_bulletin_html(commune_name, crops, period, month_labels, df_r, df_t, df_decadal, xacsuat_data, gdf_xa, active_decades, decade_risks, start_m, end_m, yr, mo,
+                              paper_size="A4", dpi=300, include_logo=True):
     forecast_months = [((mo + offset - 1) % 12) + 1 for offset in range(1, 4)]
     map_div = _fig_to_html_div(build_commune_map_figure(commune_name, gdf_xa), "export_map_div", export_height=300, export_width=260)
     clim_div = _fig_to_html_div(build_climate_normal_chart(commune_name, df_r, df_t, forecast_months), "export_clim_div", export_height=300, export_width=680)
@@ -1296,6 +1417,12 @@ def build_full_bulletin_html(commune_name, crops, period, month_labels, df_r, df
         """
 
     plotly_cdn = "https://cdn.plot.ly/plotly-2.32.0.min.js"
+
+    # v1.5.0 — Khổ giấy A4/A3 áp dụng cho @media print + hiển thị DPI trong ghi chú xuất bản;
+    # logo cơ quan chèn tuỳ chọn ở góc header (nếu bật include_logo và đã có INSTITUTE_LOGO_URL)
+    paper_w_mm, paper_h_mm = EXPORT_PAPER_SIZES_MM.get(paper_size, EXPORT_PAPER_SIZES_MM["A4"])
+    logo_header_html = f'<img src="{INSTITUTE_LOGO_URL}" alt="Logo" style="height:34px;width:34px;object-fit:contain;border-radius:5px;vertical-align:middle;margin-right:8px;">' if (include_logo and INSTITUTE_LOGO_URL) else ""
+
     return f"""<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><title>Bản tin khí hậu – Xã {commune_name} – {start_m} đến {end_m}</title><script src="{plotly_cdn}"></script>
 <style>
   html {{ -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }}
@@ -1303,7 +1430,7 @@ def build_full_bulletin_html(commune_name, crops, period, month_labels, df_r, df
   body {{ font-family: "Segoe UI", Arial, sans-serif; margin: 0; padding: 0; background: #f4f6f8; color: #222; }}
   .page {{ max-width: 1100px; margin: 18px auto 60px auto; background: #fff; box-shadow: 0 2px 14px rgba(0,0,0,0.10); border-radius: 10px; overflow: hidden; }}
   .doc-header {{ background: linear-gradient(135deg, #073B4C 0%, #0F8B8D 100%); color: #fff; padding: 22px 28px 18px 28px; }}
-  .doc-header .org {{ font-size: 12.5px; opacity: 0.9; margin: 0 0 4px 0; }}
+  .doc-header .org {{ font-size: 12.5px; opacity: 0.9; margin: 0 0 4px 0; display:flex; align-items:center; }}
   .doc-header h1 {{ margin: 4px 0 6px 0; font-size: 1.5rem; }}
   .doc-header .meta {{ font-size: 12.5px; opacity: 0.9; }}
   .toolbar {{ display: flex; justify-content: flex-end; gap: 10px; padding: 12px 28px; background: #eef3f6; border-bottom: 1px solid #dbe3e8; }}
@@ -1328,9 +1455,10 @@ def build_full_bulletin_html(commune_name, crops, period, month_labels, df_r, df
   .legend-chip {{ padding: 2px 9px; margin-right: 6px; border-radius: 3px; }}
   table {{ font-family: inherit; }}
   .footer-note {{ font-size: 11.5px; color: #8a93a3; text-align: center; padding: 16px 0 22px 0; }}
+  @page {{ size: {paper_size}; margin: 12mm; }}
   @media print {{
     * {{ -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }}
-    body {{ background: #fff; }} .page {{ box-shadow: none; margin: 0; border-radius: 0; max-width: 100%; }}
+    body {{ background: #fff; }} .page {{ box-shadow: none; margin: 0; border-radius: 0; max-width: {paper_w_mm}mm; }}
     .toolbar {{ display: none !important; }} .risk-block {{ break-inside: avoid; page-break-inside: avoid; }}
     .two-col {{ break-inside: avoid; page-break-inside: avoid; display: flex !important; flex-wrap: nowrap !important; }}
     .col-map  {{ flex: 0 0 260px !important; width: 260px !important; }} .col-chart {{ flex: 1 1 0 !important; min-width: 0 !important; }}
@@ -1340,9 +1468,9 @@ def build_full_bulletin_html(commune_name, crops, period, month_labels, df_r, df
 </head><body>
   <div class="page">
     <div class="doc-header">
-      <p class="org">Viện Khoa học Khí tượng Thủy văn Môi trường và Biển — Phòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu</p>
+      <p class="org">{logo_header_html}Viện Khoa học Khí tượng Thủy văn Môi trường và Biển — Phòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu</p>
       <h1>📋 Bản tin cảnh báo rủi ro khí hậu – Xã {commune_name}</h1>
-      <div class="meta">Giai đoạn dự báo: tháng {start_m} đến tháng {end_m} &nbsp;•&nbsp; Kỳ dữ liệu: {period[:4]}/{period[4:]} &nbsp;•&nbsp; Xuất lúc: {datetime.now().strftime("%H:%M %d/%m/%Y")}</div>
+      <div class="meta">Giai đoạn dự báo: tháng {start_m} đến tháng {end_m} &nbsp;•&nbsp; Kỳ dữ liệu: {period[:4]}/{period[4:]} &nbsp;•&nbsp; Xuất lúc: {datetime.now().strftime("%H:%M %d/%m/%Y")} &nbsp;•&nbsp; Khổ giấy: {paper_size} &nbsp;•&nbsp; {dpi} DPI</div>
     </div>
     <div class="toolbar"><button class="btn btn-print" onclick="window.print()">🖨️ In / Lưu PDF</button></div>
     <div class="content">
@@ -1362,12 +1490,32 @@ def build_full_bulletin_html(commune_name, crops, period, month_labels, df_r, df
 </body></html>"""
 
 def render_export_button(commune_name, crops, period, month_labels, df_r, df_t, df_decadal, xacsuat_data, gdf_xa, active_decades, decade_risks, start_m, end_m, yr, mo, button_key):
-    if st.button("📤 Export bản tin", key=button_key, type="primary", use_container_width=False):
+    # v1.5.0 — Hộp thoại "Xuất bản tin chất lượng cao" (tham khảo hộp thoại
+    # "Xuất bản đồ chất lượng cao" của kichban.imh.ac.vn): khổ giấy A4/A3, DPI, logo cơ quan
+    popover_fn = st.popover if hasattr(st, "popover") else None
+    if popover_fn:
+        with popover_fn("📤 Export bản tin", use_container_width=False):
+            st.markdown("**⚙️ Tuỳ chọn xuất bản tin chất lượng cao**")
+            paper_size = st.radio("Khổ giấy", ["A4", "A3"], horizontal=True, key=f"{button_key}_paper")
+            dpi = st.select_slider("Độ phân giải (DPI)", options=[150, 300, 600], value=300, key=f"{button_key}_dpi")
+            include_logo = st.checkbox("Chèn logo cơ quan vào bản tin", value=True, key=f"{button_key}_logo")
+            if not INSTITUTE_LOGO_URL and include_logo:
+                st.caption("ℹ️ Chưa cấu hình `INSTITUTE_LOGO_URL` nên bản tin sẽ tạm không có ảnh logo.")
+            do_export = st.button("📄 Tạo & mở bản tin", key=f"{button_key}_go", type="primary")
+    else:
+        with st.expander("📤 Export bản tin — tuỳ chọn nâng cao", expanded=False):
+            paper_size = st.radio("Khổ giấy", ["A4", "A3"], horizontal=True, key=f"{button_key}_paper")
+            dpi = st.select_slider("Độ phân giải (DPI)", options=[150, 300, 600], value=300, key=f"{button_key}_dpi")
+            include_logo = st.checkbox("Chèn logo cơ quan vào bản tin", value=True, key=f"{button_key}_logo")
+            do_export = st.button("📄 Tạo & mở bản tin", key=f"{button_key}_go", type="primary")
+
+    if do_export:
         with st.spinner("📄 Đang tạo bản tin HTML …"):
-            html_doc = build_full_bulletin_html(commune_name, crops, period, month_labels, df_r, df_t, df_decadal, xacsuat_data, gdf_xa, active_decades, decade_risks, start_m, end_m, yr, mo)
+            html_doc = build_full_bulletin_html(commune_name, crops, period, month_labels, df_r, df_t, df_decadal, xacsuat_data, gdf_xa, active_decades, decade_risks, start_m, end_m, yr, mo,
+                                                 paper_size=paper_size, dpi=dpi, include_logo=include_logo)
         b64 = base64.b64encode(html_doc.encode("utf-8")).decode("ascii")
         components.html(f"""<script>(function() {{ const b64 = "{b64}"; const byteChars = atob(b64); const byteNumbers = new Array(byteChars.length); for (let i = 0; i < byteChars.length; i++) {{ byteNumbers[i] = byteChars.charCodeAt(i); }} const byteArray = new Uint8Array(byteNumbers); const blob = new Blob([byteArray], {{type: 'text/html;charset=utf-8'}}); const url = URL.createObjectURL(blob); window.open(url, '_blank'); }})();</script>""", height=0)
-        st.success("✅ Đã mở bản tin trong tab mới. Nếu trình duyệt chặn pop-up, vui lòng cho phép pop-up cho trang này rồi bấm lại.")
+        st.success(f"✅ Đã tạo bản tin ({paper_size}, {dpi} DPI) và mở trong tab mới. Nếu trình duyệt chặn pop-up, vui lòng cho phép pop-up cho trang này rồi bấm lại.")
 
 # ══════════════════════════════════════════════════════════════════════════════
 # RENDER BẢN TIN XÃ
@@ -1481,6 +1629,25 @@ def render_commune_bulletin(commune_name, crops, period, month_labels, df_r, df_
         st.markdown('<div style="font-size:11px; margin:-6px 0 10px 0;"><span style="background:#c8f7c5; padding:2px 8px; margin-right:6px; border-radius:3px;">■ Thấp</span><span style="background:#fff176; padding:2px 8px; margin-right:6px; border-radius:3px;">■ Trung bình (TB)</span><span style="background:#ff8a65; padding:2px 8px; margin-right:6px; border-radius:3px;">■ Cao</span><span style="background:#f0f0f0; padding:2px 8px; border-radius:3px;">■ Không áp dụng</span></div>', unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
+# v1.5.0 — THANH MENU NGANG TRÊN CÙNG (tham khảo header của kichban.imh.ac.vn:
+# Trang chủ / Giới thiệu / Hướng dẫn / Liên hệ)
+# ══════════════════════════════════════════════════════════════════════════════
+
+TOPNAV_ITEMS = [
+    ("🏠 Trang chủ", "📖 Giới thiệu"),
+    ("📖 Giới thiệu", "📖 Giới thiệu"),
+    ("💬 Liên hệ", "💬 Phản hồi"),
+]
+
+def render_topnav_bar(active_menu):
+    links_html = ""
+    for label, target_menu in TOPNAV_ITEMS:
+        cls = "active" if target_menu == active_menu else ""
+        # Dùng liên kết dạng query param để đồng bộ với sidebar (radio) qua session_state
+        links_html += f'<a class="{cls}" href="?goto={target_menu.split(" ",1)[1] if " " in target_menu else target_menu}" target="_self">{label}</a>'
+    st.markdown(f'<div class="topnav-bar">{links_html}</div>', unsafe_allow_html=True)
+
+# ══════════════════════════════════════════════════════════════════════════════
 # CÁC TRANG CHÍNH
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -1547,7 +1714,7 @@ def page_du_bao():
     if not periods: st.error("❌ Không kết nối được server hoặc chưa có dữ liệu."); return
 
     periods_desc = list(reversed(periods)); yr_mo_labels = [f"{p[:4]}/{p[4:]}" for p in periods_desc]
-    col1, col2, col3 = st.columns([2, 2, 2])
+    col1, col2 = st.columns([2, 2])
     with col1:
         sel_idx = st.selectbox("📅 Kỳ dự báo:", range(len(periods_desc)), format_func=lambda i: yr_mo_labels[i], help="Tự động cập nhật khi server có thư mục mới")
         sel_period = periods_desc[sel_idx]
@@ -1555,12 +1722,11 @@ def page_du_bao():
     yr, mo = int(sel_period[:4]), int(sel_period[4:])
     month_labels = [f"Tháng {((mo + d - 1) % 12) + 1:02d}/{yr + (mo + d - 1) // 12}" for d in range(1, 4)]
     with col2: month_idx = st.selectbox("🗓️ Hạn dự báo:", range(3), format_func=lambda i: month_labels[i])
-    with col3: show_xa = st.toggle("🗺️ Hiển thị lớp xã", value=False)
 
     st.markdown("---")
     tab_c, tab_e = st.tabs(["🌡️ Chuẩn sai dự báo khí hậu", "⚠️ Chuẩn sai dự báo cực đoan"])
-    with tab_c: _map_fragment("c", CLIMATE_VARS, sel_period, month_idx, boundary_data, month_labels, show_xa)
-    with tab_e: _map_fragment("e", EXTREME_VARS, sel_period, month_idx, boundary_data, month_labels, show_xa)
+    with tab_c: _map_fragment("c", CLIMATE_VAR_GROUPS, CLIMATE_VARS, sel_period, month_idx, boundary_data, month_labels)
+    with tab_e: _map_fragment("e", EXTREME_VAR_GROUPS, EXTREME_VARS, sel_period, month_idx, boundary_data, month_labels)
 
 def page_ban_tin_xa():
     st.markdown('<div class="module-header">📋 Bản tin cảnh báo rủi ro khí hậu</div>', unsafe_allow_html=True)
@@ -1620,7 +1786,10 @@ def page_phan_hoi():
 with st.sidebar:
     st.markdown("## 🌾 Bản tin Khí hậu\n**Quảng Ninh – Nông nghiệp**\n---")
     menu = st.radio("📌 Chọn module:", ["📖 Giới thiệu", "🔄 Dự báo khí hậu mùa", "📋 Bản tin cảnh báo rủi ro khí hậu", "💾 Bản tin đã lưu", "📤 Export bản tin", "💬 Phản hồi"], label_visibility="collapsed")
-    st.markdown("---\nPhòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu\n - Viện Khoa học Khí tượng Thủy văn Môi trường và Biển\n---\n*Phiên bản 1.4.2 – 07/2026*")
+    st.markdown("---\nPhòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu\n - Viện Khoa học Khí tượng Thủy văn Môi trường và Biển\n---\n*Phiên bản 1.5.0 – 07/2026*")
+
+# v1.5.0 — Thanh menu ngang trên cùng, hiển thị phía trên nội dung mọi trang
+render_topnav_bar(menu)
 
 if   menu == "📖 Giới thiệu":                        page_gioi_thieu()
 elif menu == "🔄 Dự báo khí hậu mùa":                page_du_bao()
