@@ -1621,7 +1621,7 @@ def page_phan_hoi():
 with st.sidebar:
     st.markdown("## 🌾 Bản tin Khí hậu\n**Quảng Ninh – Nông nghiệp**\n---")
     menu = st.radio("📌 Chọn module:", ["📖 Giới thiệu", "🔄 Dự báo khí hậu mùa", "📋 Bản tin cảnh báo rủi ro khí hậu", "💾 Bản tin đã lưu", "📤 Export bản tin", "💬 Phản hồi"], label_visibility="collapsed")
-    st.markdown("---\nPhòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu\nViện Khoa học Khí tượng Thủy văn Môi trường và Biển\n---\n*Phiên bản 1.4.2 – 07/2026*")
+    st.markdown("---\nPhòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu\n - Viện Khoa học Khí tượng Thủy văn Môi trường và Biển\n---\n*Phiên bản 1.4.2 – 07/2026*")
 
 if   menu == "📖 Giới thiệu":                        page_gioi_thieu()
 elif menu == "🔄 Dự báo khí hậu mùa":                page_du_bao()
