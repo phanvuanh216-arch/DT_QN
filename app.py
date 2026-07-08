@@ -38,6 +38,12 @@ THAY ĐỔI v1.5.0 – ÁP DỤNG THAM KHẢO GIAO DIỆN kichban.imh.ac.vn:
   [NEW]  Hộp thoại "Xuất bản đồ / bản tin chất lượng cao": khổ giấy (A4/A3),
          độ phân giải (DPI), có/không chèn logo cơ quan
   [KEEP] Giữ nguyên toàn bộ code, cấu trúc, logic xử lý dữ liệu của v1.4.2
+THAY ĐỔI v1.5.1 – GỘP MODULE:
+  [NEW]  Gộp toàn bộ nội dung module "Giới thiệu" (banner, mục tiêu, số liệu)
+         vào module "Trang chủ" (đổi tên page_gioi_thieu -> page_trang_chu)
+  [NEW]  Bỏ mục "📖 Giới thiệu" riêng trong sidebar bên trái; sidebar giờ bắt
+         đầu bằng "🏠 Trang chủ" (chứa toàn bộ nội dung Giới thiệu cũ)
+  [NEW]  Thanh menu ngang trên cùng chỉ còn 2 mục: Trang chủ / Liên hệ
 """
 
 import streamlit as st
@@ -1634,8 +1640,7 @@ def render_commune_bulletin(commune_name, crops, period, month_labels, df_r, df_
 # ══════════════════════════════════════════════════════════════════════════════
 
 TOPNAV_ITEMS = [
-    ("🏠 Trang chủ", "📖 Giới thiệu"),
-    ("📖 Giới thiệu", "📖 Giới thiệu"),
+    ("🏠 Trang chủ", "🏠 Trang chủ"),
     ("💬 Liên hệ", "💬 Phản hồi"),
 ]
 
@@ -1651,7 +1656,7 @@ def render_topnav_bar(active_menu):
 # CÁC TRANG CHÍNH
 # ══════════════════════════════════════════════════════════════════════════════
 
-def page_gioi_thieu():
+def page_trang_chu():
     # ── Header: logo Viện + tên Viện liên kết tới Cổng TTĐT Sở KH&CN tỉnh Quảng Ninh ──
     if INSTITUTE_LOGO_URL:
         logo_html = f'<img src="{INSTITUTE_LOGO_URL}" alt="Logo Viện">'
@@ -1785,13 +1790,13 @@ def page_phan_hoi():
 # ══════════════════════════════════════════════════════════════════════════════
 with st.sidebar:
     st.markdown("## 🌾 Bản tin Khí hậu\n**Quảng Ninh – Nông nghiệp**\n---")
-    menu = st.radio("📌 Chọn module:", ["📖 Giới thiệu", "🔄 Dự báo khí hậu mùa", "📋 Bản tin cảnh báo rủi ro khí hậu", "💾 Bản tin đã lưu", "📤 Export bản tin", "💬 Phản hồi"], label_visibility="collapsed")
-    st.markdown("---\nPhòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu\n - Viện Khoa học Khí tượng Thủy văn Môi trường và Biển\n---\n*Phiên bản 1.5.0 – 07/2026*")
+    menu = st.radio("📌 Chọn module:", ["🏠 Trang chủ", "🔄 Dự báo khí hậu mùa", "📋 Bản tin cảnh báo rủi ro khí hậu", "💾 Bản tin đã lưu", "📤 Export bản tin", "💬 Phản hồi"], label_visibility="collapsed")
+    st.markdown("---\nPhòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu\n - Viện Khoa học Khí tượng Thủy văn Môi trường và Biển\n---\n*Phiên bản 1.5.1 – 07/2026*")
 
-# v1.5.0 — Thanh menu ngang trên cùng, hiển thị phía trên nội dung mọi trang
+# v1.5.1 — Thanh menu ngang trên cùng, hiển thị phía trên nội dung mọi trang
 render_topnav_bar(menu)
 
-if   menu == "📖 Giới thiệu":                        page_gioi_thieu()
+if   menu == "🏠 Trang chủ":                          page_trang_chu()
 elif menu == "🔄 Dự báo khí hậu mùa":                page_du_bao()
 elif menu == "📋 Bản tin cảnh báo rủi ro khí hậu":   page_ban_tin_xa()
 elif menu == "💾 Bản tin đã lưu":                      page_ban_tin_da_luu()
