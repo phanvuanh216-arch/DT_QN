@@ -1549,7 +1549,7 @@ def page_du_bao():
     periods_desc = list(reversed(periods)); yr_mo_labels = [f"{p[:4]}/{p[4:]}" for p in periods_desc]
     col1, col2, col3 = st.columns([2, 2, 2])
     with col1:
-        sel_idx = st.selectbox("📅 Hạn dự báo:", range(len(periods_desc)), format_func=lambda i: yr_mo_labels[i], help="Tự động cập nhật khi server có thư mục mới")
+        sel_idx = st.selectbox("📅 Kỳ dự báo:", range(len(periods_desc)), format_func=lambda i: yr_mo_labels[i], help="Tự động cập nhật khi server có thư mục mới")
         sel_period = periods_desc[sel_idx]
 
     yr, mo = int(sel_period[:4]), int(sel_period[4:])
