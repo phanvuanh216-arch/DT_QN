@@ -77,6 +77,15 @@ THAY ĐỔI v1.5.4 – BIỂU ĐỒ "ĐẶC TRƯNG KHÍ HẬU TBNN" (module Bả
          cần chỉnh tay
   [NEW]  Hàm `_group_consecutive_months()`: gom các tháng dự báo liền kề thành
          từng đoạn để vẽ khung, xử lý cả trường hợp tháng dự báo không liên tục
+THAY ĐỔI v1.5.5 – SỬA LỖI TRANG IN/LƯU RA SAI KHỔ GIẤY:
+  [FIX]  Trang "In / Lưu PDF" của bản tin export đôi lúc ra khổ A3 dù đã chọn
+         A4 — nguyên nhân: CSS `@page {{ size: A4; }}` khai báo theo TÊN khổ
+         giấy, một số trình duyệt (vd Cốc Cốc) không nhận đúng tên này và rơi
+         về khổ mặc định của máy in/hệ thống
+  [NEW]  Đổi sang khai báo kích thước CHÍNH XÁC theo mm: `@page {{ size: 210mm
+         297mm; }}` cho A4 (297mm × 420mm cho A3) — được hỗ trợ rộng rãi hơn
+         và luôn ra đúng khổ đã chọn bất kể trình duyệt
+  [NEW]  Đặt rõ mặc định "A4" (index=0) trong hộp thoại xuất bản tin
 """
 
 import streamlit as st
@@ -1567,7 +1576,7 @@ def build_full_bulletin_html(commune_name, crops, period, month_labels, df_r, df
   .legend-chip {{ padding: 2px 9px; margin-right: 6px; border-radius: 3px; }}
   table {{ font-family: inherit; }}
   .footer-note {{ font-size: 11.5px; color: #8a93a3; text-align: center; padding: 16px 0 22px 0; }}
-  @page {{ size: {paper_size}; margin: 12mm; }}
+  @page {{ size: {paper_w_mm}mm {paper_h_mm}mm; margin: 12mm; }}
   @media print {{
     * {{ -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }}
     body {{ background: #fff; }} .page {{ box-shadow: none; margin: 0; border-radius: 0; max-width: {paper_w_mm}mm; }}
@@ -1608,7 +1617,7 @@ def render_export_button(commune_name, crops, period, month_labels, df_r, df_t, 
     if popover_fn:
         with popover_fn("📤 Export bản tin", use_container_width=False):
             st.markdown("**⚙️ Tuỳ chọn xuất bản tin chất lượng cao**")
-            paper_size = st.radio("Khổ giấy", ["A4", "A3"], horizontal=True, key=f"{button_key}_paper")
+            paper_size = st.radio("Khổ giấy", ["A4", "A3"], index=0, horizontal=True, key=f"{button_key}_paper")
             dpi = st.select_slider("Độ phân giải (DPI)", options=[150, 300, 600], value=300, key=f"{button_key}_dpi")
             include_logo = st.checkbox("Chèn logo cơ quan vào bản tin", value=True, key=f"{button_key}_logo")
             if not INSTITUTE_LOGO_URL and include_logo:
@@ -1616,7 +1625,7 @@ def render_export_button(commune_name, crops, period, month_labels, df_r, df_t, 
             do_export = st.button("📄 Tạo & mở bản tin", key=f"{button_key}_go", type="primary")
     else:
         with st.expander("📤 Export bản tin — tuỳ chọn nâng cao", expanded=False):
-            paper_size = st.radio("Khổ giấy", ["A4", "A3"], horizontal=True, key=f"{button_key}_paper")
+            paper_size = st.radio("Khổ giấy", ["A4", "A3"], index=0, horizontal=True, key=f"{button_key}_paper")
             dpi = st.select_slider("Độ phân giải (DPI)", options=[150, 300, 600], value=300, key=f"{button_key}_dpi")
             include_logo = st.checkbox("Chèn logo cơ quan vào bản tin", value=True, key=f"{button_key}_logo")
             do_export = st.button("📄 Tạo & mở bản tin", key=f"{button_key}_go", type="primary")
@@ -1908,7 +1917,7 @@ def page_phan_hoi():
 with st.sidebar:
     st.markdown("## 🌾 Bản tin Khí hậu\n**Quảng Ninh – Nông nghiệp**\n---")
     menu = st.radio("📌 Chọn module:", ["🏠 Trang chủ", "🔄 Dự báo khí hậu mùa", "📋 Bản tin cảnh báo rủi ro khí hậu", "💾 Bản tin đã lưu", "📤 Export bản tin", "💬 Phản hồi"], label_visibility="collapsed")
-    st.markdown("---\nPhòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu\n - Viện Khoa học Khí tượng Thủy văn Môi trường và Biển\n---\n*Phiên bản 1.5.4 – 07/2026*")
+    st.markdown("---\nPhòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu\n - Viện Khoa học Khí tượng Thủy văn Môi trường và Biển\n---\n*Phiên bản 1.5.5 – 07/2026*")
 
 # v1.5.1 — Thanh menu ngang trên cùng, hiển thị phía trên nội dung mọi trang
 render_topnav_bar(menu)
