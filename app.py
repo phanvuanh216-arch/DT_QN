@@ -62,7 +62,7 @@ st.set_page_config(
 st.markdown("""
 <style>
     .block-container { padding-top: 0.5rem !important; padding-bottom: 1rem !important; }
-    header[data-testid="stHeader"] { height: 0rem !important; min-height: 0rem !important; }
+    header[data-testid="stHeader"] { height: 0rem !important; min-height: 0rem !important; overflow: visible !important; }
     /* Ẩn menu ba gạch, nút "Deploy" và footer "Made with Streamlit" ở góc màn hình */
     #MainMenu { visibility: hidden !important; }
     footer { visibility: hidden !important; }
@@ -70,9 +70,15 @@ st.markdown("""
     [data-testid="stDecoration"] { display: none !important; }
     [data-testid="stStatusWidget"] { visibility: hidden !important; }
 
-    /* ── Đổi icon thu gọn/mở rộng sidebar (mũi tên "<<" / ">>") thành ô vuông 3 gạch ── */
+    /* ── Đổi icon thu gọn/mở rộng sidebar (mũi tên "<<" / ">>") thành ô vuông 3 gạch ──
+       Dùng position:fixed để nút KHÔNG bị ẩn theo header (đã set height:0 ở trên) */
     [data-testid="collapsedControl"],
-    [data-testid="stSidebarCollapseButton"] {
+    [data-testid="stSidebarCollapseButton"],
+    button[kind="header"] {
+        position: fixed !important;
+        top: 0.6rem !important;
+        left: 0.6rem !important;
+        z-index: 999999 !important;
         background: linear-gradient(135deg, #073B4C 0%, #0F8B8D 100%) !important;
         border-radius: 6px !important;
         width: 34px !important;
@@ -83,13 +89,26 @@ st.markdown("""
         align-items: center !important;
         justify-content: center !important;
         border: none !important;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.25) !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+    }
+    /* Khi sidebar đang mở, nút nằm bên trong sidebar -> đặt lại vị trí theo sidebar */
+    [data-testid="stSidebar"][aria-expanded="true"] [data-testid="stSidebarCollapseButton"],
+    [data-testid="stSidebar"][aria-expanded="true"] button[kind="header"] {
+        position: absolute !important;
+        top: 0.6rem !important;
+        left: auto !important;
+        right: 0.6rem !important;
     }
     [data-testid="collapsedControl"] svg,
-    [data-testid="stSidebarCollapseButton"] svg {
+    [data-testid="stSidebarCollapseButton"] svg,
+    button[kind="header"] svg {
         display: none !important;
     }
     [data-testid="collapsedControl"]::before,
-    [data-testid="stSidebarCollapseButton"]::before {
+    [data-testid="stSidebarCollapseButton"]::before,
+    button[kind="header"]::before {
         content: "";
         display: block;
         width: 16px;
