@@ -66,6 +66,17 @@ THAY ĐỔI v1.5.3 – TỐI ƯU TỐC ĐỘ NỘI SUY BẢN ĐỒ:
   [NEW]  Giảm lưới nội suy mặc định từ 400×400 xuống 300×300 điểm — vẫn giữ
          độ chi tiết trực quan tốt nhưng giảm đáng kể thời gian tính toán
          và tải vẽ lại trên trình duyệt
+THAY ĐỔI v1.5.4 – BIỂU ĐỒ "ĐẶC TRƯNG KHÍ HẬU TBNN" (module Bản tin cảnh báo):
+  [FIX]  Bỏ tô màu đỏ thủ công cho các cột lượng mưa tháng dự báo — toàn bộ
+         cột lượng mưa nay dùng ĐÚNG 1 màu xanh dương đồng bộ với chú thích
+         "Lượng mưa" (không còn lẫn 2 tông màu gây hiểu nhầm là 2 loại dữ liệu)
+  [NEW]  Thay bằng khung chữ nhật (shape) TỰ ĐỘNG khoanh vùng các tháng đang
+         dự báo — khung viền nét đứt đỏ + lớp phủ mờ + nhãn "Giai đoạn dự báo"
+         phía trên; khung được tính lại theo `forecast_months` mỗi lần đổi kỳ/
+         hạn dự báo nên luôn tự "chạy" đúng theo tháng dự báo hiện tại, không
+         cần chỉnh tay
+  [NEW]  Hàm `_group_consecutive_months()`: gom các tháng dự báo liền kề thành
+         từng đoạn để vẽ khung, xử lý cả trường hợp tháng dự báo không liên tục
 """
 
 import streamlit as st
@@ -1057,24 +1068,62 @@ def get_active_crops(crops, active_decades):
 # CHART & TABLES
 # ══════════════════════════════════════════════════════════════════════════════
 
+def _group_consecutive_months(months_sorted):
+    """
+    v1.5.4 — Gom các tháng dự báo liền kề thành từng đoạn liên tục, để vẽ MỖI đoạn
+    bằng 1 khung chữ nhật riêng (vd tháng dự báo 7,8,9 -> 1 khung; nếu có trường hợp
+    đứt quãng thì tách thành nhiều khung). Trục tháng của biểu đồ là Th1→Th12 cố định
+    theo năm dương lịch nên không cần xử lý vòng lặp qua năm.
+    """
+    if not months_sorted: return []
+    segments, cur = [], [months_sorted[0]]
+    for m in months_sorted[1:]:
+        if m == cur[-1] + 1:
+            cur.append(m)
+        else:
+            segments.append(cur); cur = [m]
+    segments.append(cur)
+    return segments
+
 def build_climate_normal_chart(commune_name, df_r, df_t, forecast_months):
     clim = get_commune_monthly_climate(commune_name, df_r, df_t)
     if not clim: return None
     months_vn = ["Th1","Th2","Th3","Th4","Th5","Th6","Th7","Th8","Th9","Th10","Th11","Th12"]
     R_vals = [clim.get(m, {}).get("R", 0) for m in range(1, 13)]
     T_vals = [clim.get(m, {}).get("T", 0) for m in range(1, 13)]
-    bar_colors = ["#1565c0" if (m not in forecast_months) else "#e53935" for m in range(1, 13)]
+    x_nums = list(range(1, 13))  # v1.5.4 — trục số nguyên 1..12 để đặt khung chính xác theo tháng
 
     fig = go.Figure()
-    fig.add_trace(go.Bar(x=months_vn, y=R_vals, name="Lượng mưa", marker_color=bar_colors, yaxis="y1", hovertemplate="Mưa: %{y:.0f} mm<extra></extra>"))
-    fig.add_trace(go.Scatter(x=months_vn, y=T_vals, name="Nhiệt độ", mode="lines+markers", line=dict(color="#e65100", width=2.5), marker=dict(color="#e65100", size=7), yaxis="y2", hovertemplate="Nhiệt độ: %{y:.1f}°C<extra></extra>"))
+    # v1.5.4 — Bỏ tô đỏ cột tháng dự báo, TẤT CẢ cột lượng mưa dùng ĐÚNG 1 màu (đồng
+    # bộ với màu chú thích "Lượng mưa"); việc đánh dấu tháng dự báo chuyển sang khung
+    # chữ nhật (shape) tự động khoanh vùng bên dưới — không cần tô màu thủ công nữa.
+    fig.add_trace(go.Bar(x=x_nums, y=R_vals, name="Lượng mưa", marker_color="#1565c0", yaxis="y1", hovertemplate="Mưa: %{y:.0f} mm<extra></extra>"))
+    fig.add_trace(go.Scatter(x=x_nums, y=T_vals, name="Nhiệt độ", mode="lines+markers", line=dict(color="#e65100", width=2.5), marker=dict(color="#e65100", size=7), yaxis="y2", hovertemplate="Nhiệt độ: %{y:.1f}°C<extra></extra>"))
+
+    # v1.5.4 — Khung chữ nhật TỰ ĐỘNG khoanh vùng tháng dự báo (thay cho việc tô màu
+    # cột thủ công). Khung được tính lại mỗi lần forecast_months thay đổi (đổi kỳ dự
+    # báo/hạn dự báo ở trên) nên luôn "tự chạy" theo đúng tháng đang dự báo.
+    shapes, annotations = [], []
+    if forecast_months:
+        segments = _group_consecutive_months(sorted(set(forecast_months)))
+        for seg in segments:
+            x0, x1 = seg[0] - 0.5, seg[-1] + 0.5
+            # Khung ngoài mờ tạo hiệu ứng "phát sáng" + khung trong nét đứt nổi bật
+            shapes.append(dict(type="rect", xref="x", yref="paper", x0=x0, x1=x1, y0=0.0, y1=1.0,
+                                line=dict(width=0), fillcolor="rgba(229,57,53,0.07)", layer="below"))
+            shapes.append(dict(type="rect", xref="x", yref="paper", x0=x0, x1=x1, y0=0.02, y1=0.98,
+                                line=dict(color="#e53935", width=2, dash="dash"), fillcolor="rgba(0,0,0,0)", layer="above"))
+            annotations.append(dict(x=(x0 + x1) / 2, y=1.0, yref="paper", yshift=14, showarrow=False,
+                                     text="Giai đoạn dự báo", font=dict(size=9.5, color="#e53935", family="Arial"), xanchor="center"))
+
     fig.update_layout(
         title=dict(text="<b>Đặc trưng khí hậu trung bình nhiều năm (1981–2024)</b>", font=dict(size=13, family="Arial"), x=0.5, xanchor="center"),
-        xaxis=dict(tickfont=dict(size=11), showgrid=False),
+        xaxis=dict(tickmode="array", tickvals=x_nums, ticktext=months_vn, tickfont=dict(size=11), showgrid=False, range=[0.3, 12.7]),
         yaxis=dict(title=dict(text="Lượng mưa (mm)", font=dict(color="#1565c0", size=11)), tickfont=dict(color="#1565c0", size=10), range=[0, max(R_vals) * 1.25 if R_vals else 400], showgrid=True, gridcolor="rgba(180,180,180,0.3)"),
         yaxis2=dict(title=dict(text="Nhiệt độ (°C)", font=dict(color="#e65100", size=11)), tickfont=dict(color="#e65100", size=10), overlaying="y", side="right", range=[min(T_vals) - 3, max(T_vals) + 5] if T_vals else [15, 40], showgrid=False),
         legend=dict(x=0.02, y=-0.15, orientation="h", bgcolor="rgba(255,255,255,0.8)", font=dict(size=11)),
         height=280, margin=dict(l=50, r=60, t=45, b=50), plot_bgcolor="white", paper_bgcolor="white", bargap=0.2,
+        shapes=shapes, annotations=annotations,
     )
     return fig
 
@@ -1859,9 +1908,9 @@ def page_phan_hoi():
 with st.sidebar:
     st.markdown("## 🌾 Bản tin Khí hậu\n**Quảng Ninh – Nông nghiệp**\n---")
     menu = st.radio("📌 Chọn module:", ["🏠 Trang chủ", "🔄 Dự báo khí hậu mùa", "📋 Bản tin cảnh báo rủi ro khí hậu", "💾 Bản tin đã lưu", "📤 Export bản tin", "💬 Phản hồi"], label_visibility="collapsed")
-    st.markdown("---\nPhòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu\n - Viện Khoa học Khí tượng Thủy văn Môi trường và Biển\n---\n*Phiên bản 1.5.3 – 07/2026*")
+    st.markdown("---\nPhòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu\n - Viện Khoa học Khí tượng Thủy văn Môi trường và Biển\n---\n*Phiên bản 1.5.4 – 07/2026*")
 
-# v1.5.3 — Thanh menu ngang trên cùng, hiển thị phía trên nội dung mọi trang
+# v1.5.1 — Thanh menu ngang trên cùng, hiển thị phía trên nội dung mọi trang
 render_topnav_bar(menu)
 
 if   menu == "🏠 Trang chủ":                          page_trang_chu()
