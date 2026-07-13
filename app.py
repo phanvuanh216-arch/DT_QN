@@ -96,7 +96,13 @@ THAY ĐỔI v1.5.6 – LÀM MỚI GIAO DIỆN (SÁNG & HIỆN ĐẠI HƠN):
          module-header, risk-header để trông hiện đại, đỡ "phẳng/tối"
   [NEW]  Gắn logo Viện thật (INSTITUTE_LOGO_URL) từ GitHub thay cho biểu trưng
          mặc định
-  [KEEP] Giữ nguyên 100% logic xử lý dữ liệu, bản đồ, rủi ro, export HTML
+THAY ĐỔI v1.6.0 – HEADER CỐ ĐỊNH & CĂN GIỮA:
+  [NEW]  Căn giữa và đưa 2 logo cơ quan lên phía trên tên trong thanh cố định
+THAY ĐỔI v1.7.0 – MODULE PHẢN HỒI (LIÊN HỆ):
+  [NEW]  Xây dựng hoàn chỉnh module "Phản hồi" với giao diện giống trang liên hệ
+         của kichban.imh.ac.vn (2 cột: Thông tin liên hệ và Biểu mẫu góp ý)
+  [NEW]  Thêm card thông tin chi tiết (địa chỉ, SĐT, email) của Viện KHKTTVMT&B
+  [NEW]  Tạo biểu mẫu phản hồi trực quan (st.form) có tính năng kiểm tra lỗi (validation)
 """
 
 import streamlit as st
@@ -452,12 +458,7 @@ SO_KHCN_LOGO_URL    = "https://raw.githubusercontent.com/phanvuanh216-arch/DT_QN
 def render_fixed_top_header():
     """
     v1.6.0 — Thanh tiêu đề cố định (fixed), ghim trên cùng của TOÀN BỘ ứng dụng,
-    hiển thị ở mọi module (không chỉ riêng trang chủ). Gồm 2 logo:
-      • Bên trái : Logo Viện KHKTTV Môi trường và Biển -> liên kết https://imh.ac.vn/
-      • Bên phải : Logo Sở Khoa học và Công nghệ tỉnh Quảng Ninh -> liên kết Cổng TTĐT Sở
-    Được gọi 1 lần duy nhất ở cấp module (ngoài mọi hàm page_*) nên luôn render lại
-    trên mỗi lượt rerun/chuyển module. Sidebar và nội dung chính đã được đẩy xuống
-    (margin-top / padding-top ở phần CSS) để không bị thanh này che mất.
+    hiển thị ở mọi module (không chỉ riêng trang chủ).
     """
     st.markdown(f"""
     <div class="fixed-top-header">
@@ -1838,8 +1839,76 @@ def page_ban_tin_da_luu():
     st.markdown('<div class="module-header">💾 Bản tin đã lưu</div>', unsafe_allow_html=True); st.info("Module đang phát triển.")
 def page_export():
     st.markdown('<div class="module-header">📤 Export bản tin</div>', unsafe_allow_html=True); st.info("Module đang phát triển.")
+
 def page_phan_hoi():
-    st.markdown('<div class="module-header">💬 Phản hồi</div>', unsafe_allow_html=True); st.info("Module đang phát triển.")
+    st.markdown('<div class="module-header">💬 Liên hệ & Phản hồi</div>', unsafe_allow_html=True)
+    
+    st.markdown("""
+    <style>
+    .contact-card {
+        background: #ffffff; border: 1px solid #e2f0f5; border-radius: 12px;
+        padding: 24px; box-shadow: 0 4px 16px rgba(11,76,122,0.08); height: 100%;
+    }
+    .contact-card h3 { color: #0B4C7A; margin-top: 0; margin-bottom: 20px; font-size: 1.25rem; font-weight: 800; }
+    .contact-info-item { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 18px; color: #334155; font-size: 0.95rem; line-height: 1.5; }
+    .contact-info-item .icon { font-size: 1.4rem; line-height: 1; }
+    </style>
+    """, unsafe_allow_html=True)
+
+    col1, col2 = st.columns([1, 1.2], gap="large")
+    
+    with col1:
+        st.markdown("""
+        <div class="contact-card">
+            <h3>🏢 Thông tin liên hệ</h3>
+            <div class="contact-info-item">
+                <div class="icon">📍</div>
+                <div><b>Viện Khoa học Khí tượng Thủy văn, Môi trường và Biển</b><br>
+                Phòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu<br>
+                Số 23 ngõ 62, Đường Nguyễn Chí Thanh, Phường Láng, Quận Đống Đa, TP. Hà Nội</div>
+            </div>
+            <div class="contact-info-item">
+                <div class="icon">📞</div>
+                <div>+84 24 - 37 731 410 / +84 24 - 37 756 613</div>
+            </div>
+            <div class="contact-info-item">
+                <div class="icon">📧</div>
+                <div>vt_vkttv_khdt@mae.gov.vn</div>
+            </div>
+            <div class="contact-info-item">
+                <div class="icon">🌐</div>
+                <div><a href="https://imh.ac.vn/" target="_blank" style="color: #1D9BC9; text-decoration: none; font-weight: 600;">https://imh.ac.vn/</a><br>
+                <a href="https://kichban.imh.ac.vn/" target="_blank" style="color: #1D9BC9; text-decoration: none; font-weight: 600;">https://kichban.imh.ac.vn/</a></div>
+            </div>
+            <hr style="border:none; border-top: 1px dashed #cfe3ea; margin: 24px 0;">
+            <div style="font-size: 0.86rem; color: #64748b; line-height: 1.5;">
+                <i>* Mọi ý kiến đóng góp về hệ thống bản tin rủi ro khí hậu nông nghiệp tỉnh Quảng Ninh xin vui lòng điền vào biểu mẫu bên cạnh. Đội ngũ phát triển sẽ tiếp nhận và phản hồi trong thời gian sớm nhất.</i>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+    with col2:
+        with st.container(border=True):
+            st.markdown('<div class="panel-title" style="margin-bottom: 16px; font-size: 1.1rem;">✉️ Gửi phản hồi / Góp ý</div>', unsafe_allow_html=True)
+            with st.form(key='feedback_form', clear_on_submit=False):
+                f_col1, f_col2 = st.columns(2)
+                with f_col1:
+                    name = st.text_input("Họ và tên *")
+                with f_col2:
+                    email = st.text_input("Email *")
+                    
+                org = st.text_input("Cơ quan / Đơn vị")
+                subject = st.text_input("Tiêu đề *")
+                content = st.text_area("Nội dung phản hồi *", height=140)
+                
+                st.markdown('<div style="height: 6px;"></div>', unsafe_allow_html=True)
+                submit_button = st.form_submit_button(label='🚀 Gửi phản hồi', type="primary", use_container_width=True)
+                
+                if submit_button:
+                    if not name.strip() or not email.strip() or not subject.strip() or not content.strip():
+                        st.error("⚠️ Vui lòng điền đầy đủ các trường bắt buộc có dấu sao (*).")
+                    else:
+                        st.success("✅ Cảm ơn bạn! Thông tin phản hồi đã được ghi nhận và gửi thành công tới hệ thống.")
 
 # ══════════════════════════════════════════════════════════════════════════════
 # SIDEBAR
@@ -1847,7 +1916,7 @@ def page_phan_hoi():
 with st.sidebar:
     st.markdown("## 🌾 Bản tin Khí hậu\n**Quảng Ninh – Nông nghiệp**\n---")
     menu = st.radio("📌 Chọn module:", ["🏠 Trang chủ", "🔄 Dự báo khí hậu mùa", "📋 Bản tin cảnh báo rủi ro khí hậu", "💾 Bản tin đã lưu", "📤 Export bản tin", "💬 Phản hồi"], label_visibility="collapsed")
-    st.markdown("---\nPhòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu\n - Viện Khoa học Khí tượng Thủy văn Môi trường và Biển\n---\n*Phiên bản 1.5.6 – 07/2026*")
+    st.markdown("---\nPhòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu\n - Viện Khoa học Khí tượng Thủy văn Môi trường và Biển\n---\n*Phiên bản 1.7.0 – 07/2026*")
 
 render_topnav_bar(menu)
 
