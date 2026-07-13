@@ -134,7 +134,8 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-    .block-container { padding-top: 96px !important; padding-bottom: 1rem !important; }
+    /* Điều chỉnh lại khoảng cách padding-top của block chính và vị trí các nút chức năng để phù hợp với thanh header mới cao hơn */
+    .block-container { padding-top: 120px !important; padding-bottom: 1rem !important; }
     header[data-testid="stHeader"] { height: 0rem !important; min-height: 0rem !important; overflow: visible !important; }
     /* Ẩn menu ba gạch, nút "Deploy" và footer "Made with Streamlit" ở góc màn hình */
     #MainMenu { visibility: hidden !important; }
@@ -158,7 +159,7 @@ st.markdown("""
     /* --- Nút MỞ LẠI sidebar (hiện khi sidebar đang thu gọn) --- */
     [data-testid="collapsedControl"] {
         position: fixed !important;
-        top: 92px !important;
+        top: 114px !important;
         left: 0.6rem !important;
         z-index: 999999 !important;
         background: linear-gradient(135deg, #1D9BC9 0%, #17B6A6 100%) !important;
@@ -232,8 +233,8 @@ st.markdown("""
     .stTabs [aria-selected="true"] { background-color: #17B6A6 !important; color: white !important; }
     [data-testid="stSidebar"] {
         background: linear-gradient(180deg, #1D9BC9 0%, #0F6FA8 55%, #0B4C7A 100%);
-        margin-top: 82px !important;
-        height: calc(100vh - 82px) !important;
+        margin-top: 106px !important;
+        height: calc(100vh - 106px) !important;
     }
     [data-testid="stSidebar"] * { color: #f1fbfd !important; }
     [data-testid="stSidebar"] .block-container { padding-top: 1rem !important; }
@@ -298,7 +299,7 @@ st.markdown("""
     .hero-content h1 { margin: 0 0 8px 0; font-size: 1.65rem; line-height: 1.3; }
     .hero-content p { margin: 0; font-size: 0.96rem; opacity: 0.95; max-width: 760px; }
 
-    /* ══════════ v1.5.0 – Thanh menu ngang trên cùng (tham khảo kichban.imh.ac.vn) ══════════ */
+    /* ── v1.5.0 – Thanh menu ngang trên cùng (tham khảo kichban.imh.ac.vn) ── */
     .topnav-bar {
         display: flex; align-items: center; justify-content: flex-end; gap: 4px;
         background: linear-gradient(90deg, #0F6FA8, #17B6A6); padding: 7px 18px; border-radius: 10px; margin-bottom: 12px;
@@ -312,13 +313,13 @@ st.markdown("""
     .topnav-bar a:hover { background: rgba(255,255,255,0.18); color: #ffffff !important; }
     .topnav-bar a.active { background: rgba(255,255,255,0.28); color: #ffffff !important; }
 
-    /* ══════════ v1.5.0 – Bảng điều khiển bản đồ / hộp thoại export ══════════ */
+    /* ── v1.5.0 – Bảng điều khiển bản đồ / hộp thoại export ── */
     .map-toolpanel-title {
         font-size: 0.95rem; font-weight: 700; color: #0B4C7A; margin-bottom: 4px;
         display: flex; align-items: center; gap: 6px;
     }
 
-    /* ══════════ v1.5.2 – Khung điều khiển bản đồ dạng dashboard khoa học ══════════ */
+    /* ── v1.5.2 – Khung điều khiển bản đồ dạng dashboard khoa học ── */
     .panel-title {
         font-size: 0.82rem; font-weight: 800; color: #0B4C7A; letter-spacing: 0.3px;
         text-transform: uppercase; margin: 2px 0 8px 0; display: flex; align-items: center; gap: 6px;
@@ -337,63 +338,49 @@ st.markdown("""
     .map-placeholder .big { font-size: 2.1rem; }
     [data-testid="stVerticalBlockBorderWrapper"] { border-radius: 14px !important; box-shadow: 0 2px 10px rgba(11,76,122,0.06) !important; }
 
-    /* ══════════ v1.5.6 – Card/metric/table trông "sáng" & hiện đại hơn ══════════ */
+    /* ── v1.5.6 – Card/metric/table trông "sáng" & hiện đại hơn ── */
     div[data-testid="stMetric"] {
         background: #ffffff; border: 1px solid #e2f0f5; border-radius: 12px;
         padding: 10px 14px; box-shadow: 0 3px 10px rgba(11,76,122,0.08);
     }
     table { box-shadow: 0 2px 10px rgba(11,76,122,0.06); border-radius: 8px; overflow: hidden; }
 
-    /* ══════════ v1.6.0 — THANH TIÊU ĐỀ CỐ ĐỊNH (ghim trên cùng ở MỌI module) ══════════
-       Gồm 2 logo (Viện KHKTTVMT&B bên trái – Sở KH&CN Quảng Ninh bên phải), luôn hiển
-       thị trên cùng bất kể đang ở module nào. Sidebar được "tụt xuống" (margin-top ở
-       trên) để nằm hẳn dưới thanh này, tránh bị đè/che mất nút đóng-mở sidebar. */
+    /* ══════════ v1.6.0 — THANH TIÊU ĐỀ CỐ ĐỊNH (Cấu trúc mới: đẩy logo lên trên và căn giữa) ══════════ */
     .fixed-top-header {
         position: fixed; top: 0; left: 0; right: 0; z-index: 999997;
         background: linear-gradient(120deg, #12213f 0%, #17294a 45%, #123a5e 100%);
-        padding: 11px 26px; box-shadow: 0 4px 16px rgba(0,0,0,0.28);
+        padding: 8px 26px; box-shadow: 0 4px 16px rgba(0,0,0,0.28);
         display: flex; align-items: center; justify-content: center;
     }
     .fth-inner {
-        display: flex; align-items: center; justify-content: center;
-        gap: 56px; flex-wrap: nowrap; max-width: 1100px; width: 100%;
+        display: flex; align-items: flex-start; justify-content: center;
+        gap: 48px; flex-wrap: nowrap; max-width: 1100px; width: 100%;
     }
+    /* Chuyển cấu trúc khối liên kết thành dạng dọc (column), căn giữa toàn bộ nội dung */
     .fth-block {
-        display: flex; align-items: center; gap: 14px;
-        text-decoration: none !important; flex: 1 1 0; min-width: 0;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 6px; text-decoration: none !important; flex: 1 1 0; min-width: 0; text-align: center;
     }
-    .fth-block:nth-child(2) { flex-direction: row-reverse; text-align: right; }
     .fth-block img {
-        height: 52px; width: 52px; object-fit: contain; border-radius: 50%;
+        height: 46px; width: 46px; object-fit: contain; border-radius: 50%;
         background: #ffffff; padding: 4px; flex-shrink: 0;
         box-shadow: 0 2px 8px rgba(0,0,0,0.25);
     }
     .fth-text {
-        color: #ffffff !important; font-weight: 800; font-size: 0.86rem;
-        line-height: 1.32; text-transform: uppercase; letter-spacing: 0.2px;
+        color: #ffffff !important; font-weight: 800; font-size: 0.80rem;
+        line-height: 1.35; text-transform: uppercase; letter-spacing: 0.2px;
     }
     .fth-block:hover .fth-text { color: #ffe082 !important; text-decoration: underline; }
     @media (max-width: 900px) {
-        .fth-inner { gap: 18px; }
-        .fth-text { font-size: 0.68rem; }
-        .fth-block img { height: 40px; width: 40px; }
+        .fth-inner { gap: 16px; }
+        .fth-text { font-size: 0.65rem; }
+        .fth-block img { height: 36px; width: 36px; }
     }
 </style>
 """, unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # FIX v1.4.2: NÚT MỞ/ĐÓNG SIDEBAR DỰ PHÒNG
-#   Vấn đề: ở một số phiên bản trình duyệt/Streamlit, nút gốc
-#   [data-testid="collapsedControl"] không nhận đúng CSS position:fixed ở trên
-#   (thường do một phần tử cha có transform/overflow tạo containing-block mới),
-#   khiến khi sidebar bị thu gọn thì KHÔNG còn cách nào bấm mở lại được.
-#
-#   Giải pháp: chèn một nút hamburger ĐỘC LẬP thẳng vào document cha (ngoài
-#   iframe) bằng components.html. Nút này:
-#     1) Ưu tiên tìm và bấm hộ nút gốc của Streamlit (đóng/mở đúng chuẩn).
-#     2) Nếu không tìm thấy nút gốc (do đổi tên testid ở phiên bản mới), tự
-#        ẩn/hiện sidebar bằng cách gán style.display trực tiếp.
-#   Nút được tự chèn lại mỗi giây để không bị Streamlit rerender xoá mất.
 # ══════════════════════════════════════════════════════════════════════════════
 components.html("""
 <script>
@@ -424,7 +411,7 @@ components.html("""
         b.id = 'custom-sidebar-toggle';
         b.title = 'Ẩn / hiện menu';
         b.style.cssText = `
-            position: fixed; top: 92px; left: 0.6rem; z-index: 2147483647;
+            position: fixed; top: 114px; left: 0.6rem; z-index: 2147483647;
             background: linear-gradient(135deg, #1D9BC9 0%, #17B6A6 100%);
             border-radius: 8px; width: 34px; height: 34px; border: none;
             box-shadow: 0 3px 10px rgba(23,182,166,0.35); cursor: pointer;
@@ -460,8 +447,6 @@ INSTITUTE_LOGO_URL = "https://raw.githubusercontent.com/phanvuanh216-arch/DT_QN/
 INSTITUTE_NAME      = "Viện Khoa học Khí tượng Thủy văn Môi trường và Biển"
 INSTITUTE_WEBSITE_URL = "https://imh.ac.vn/"
 DOST_QUANGNINH_URL  = "https://www.quangninh.gov.vn/so/sokhoahoccongnghe/trang/default.aspx"
-# v1.6.0 — Logo Sở Khoa học và Công nghệ tỉnh Quảng Ninh (Quốc huy), dùng cho
-# thanh tiêu đề cố định (fixed top header) hiển thị trên mọi module.
 SO_KHCN_LOGO_URL    = "https://raw.githubusercontent.com/phanvuanh216-arch/DT_QN/main/logo/Quoc_Huy_Viet_Nam_Chuan.png"
 
 def render_fixed_top_header():
@@ -512,8 +497,6 @@ EXTREME_VARS = {
     "ano.Evap":   {"label": "Bốc hơi (Evap)",                 "unit": "mm",   "cmap": "BrBG",     "levels": [-100,-50,-25,-10,0,10,25,50,100]},
 }
 
-# v1.5.0 — Gom nhóm biến (tham khảo cấu trúc "Chọn biến" của kichban.imh.ac.vn:
-# Khí quyển > Nhiệt độ / Mưa - gió ...). Dùng để dựng menu thu gọn theo nhóm.
 CLIMATE_VAR_GROUPS = {
     "🌡️ Nhiệt độ": ["ano.T2m", "ano.Tx", "ano.Tm"],
     "🌧️ Mưa - Ẩm":  ["ano.R", "ano.RH2m"],
@@ -523,7 +506,6 @@ EXTREME_VAR_GROUPS = {
     "🌧️ Mưa - Khô hạn":     ["ano.CDD", "ano.CWD", "ano.Rx1day", "ano.Rx5day", "ano.Evap"],
 }
 
-# Tách riêng đối tượng rau trong các xã
 COMMUNE_CROPS = {
     "Hải Sơn":    ["Lợn"],
     "Hải Ninh":   ["Lợn"],
@@ -566,10 +548,6 @@ COMMUNE_COL_MAP = {
     "An Sinh":    "ansinh", "Đông Triều": "dongtrieu", "Bình Khuê":  "binhkhe", "Mạo Khê":    "maokhe", "Hoàng Quế":  "hoangque",
 }
 
-# ══════════════════════════════════════════════════════════════════════════════
-# ĐỘNG LỰC HỌC MÙA VỤ 12 THÁNG TÁCH BIỆT CHO 4 CÂY RAU + LÚA + VẬT NUÔI
-# ══════════════════════════════════════════════════════════════════════════════
-
 LUA_GROWTH_STAGES = {
     "T1/1": "Gieo, nảy mầm", "T2/1": "Mạ", "T3/1": "Mạ",
     "T1/2": "Đẻ nhánh", "T2/2": "Đẻ nhánh", "T3/2": "Đẻ nhánh",
@@ -585,7 +563,6 @@ LUA_GROWTH_STAGES = {
     "T1/12": "Gieo, nảy mầm", "T2/12": "Gieo, nảy mầm", "T3/12": "Gieo, nảy mầm",
 }
 
-# 1. Bắp cải (Đông Xuân)
 BAPCAI_GROWTH_STAGES = {f"T{d}/{m}": "Nghỉ" for m in range(1, 13) for d in range(1, 4)}
 BAPCAI_GROWTH_STAGES.update({
     "T1/9": "Gieo, nảy mầm", "T2/9": "Cây con", "T3/9": "Cây có 1-2 lá thật",
@@ -595,7 +572,6 @@ BAPCAI_GROWTH_STAGES.update({
     "T1/1": "Cuốn bắp", "T2/1": "Thu hoạch", "T3/1": "Thu hoạch",
 })
 
-# 2. Súp lơ (Đông Xuân)
 SUPLO_GROWTH_STAGES = {f"T{d}/{m}": "Nghỉ" for m in range(1, 13) for d in range(1, 4)}
 SUPLO_GROWTH_STAGES.update({
     "T1/9": "Gieo, nảy mầm", "T2/9": "Cây con", "T3/9": "Cây con",
@@ -605,7 +581,6 @@ SUPLO_GROWTH_STAGES.update({
     "T1/1": "Phát triển nụ hoa", "T2/1": "Thu hoạch", "T3/1": "Thu hoạch",
 })
 
-# 3. Dưa chuột (Xuân Hè & Hè Thu)
 DUACHUOT_GROWTH_STAGES = {f"T{d}/{m}": "Nghỉ" for m in range(1, 13) for d in range(1, 4)}
 DUACHUOT_GROWTH_STAGES.update({
     "T1/2": "Nảy mầm", "T2/2": "Cây con", "T3/2": "Sinh trưởng thân lá",
@@ -616,7 +591,6 @@ DUACHUOT_GROWTH_STAGES.update({
     "T1/8": "Ra hoa - Đậu quả", "T2/8": "Ra hoa - Đậu quả", "T3/8": "Thu hoạch",
 })
 
-# 4. Bí xanh (Xuân Hè & Hè Thu)
 BIXANH_GROWTH_STAGES = {f"T{d}/{m}": "Nghỉ" for m in range(1, 13) for d in range(1, 4)}
 BIXANH_GROWTH_STAGES.update({
     "T1/2": "Nảy mầm", "T2/2": "Cây con", "T3/2": "Sinh trưởng thân lá",
@@ -643,10 +617,6 @@ CHICKEN_THI_RISK = {"normal": 70, "warn": 75, "danger": 81, "critical": 81}
 RISK_LABELS = {0: "—", 1: "Thấp", 2: "Trung bình", 3: "Cao"}
 RISK_COLORS = {0: "#f0f0f0", 1: "#c8f7c5", 2: "#fff176", 3: "#ff8a65"}
 
-# ══════════════════════════════════════════════════════════════════════════════
-# FIX ENCODING UTF-8
-# ══════════════════════════════════════════════════════════════════════════════
-
 def _fix_encoding(val):
     if not isinstance(val, str):
         return val
@@ -663,10 +633,6 @@ def _fix_gdf_text(gdf):
         except Exception:
             pass
     return gdf
-
-# ══════════════════════════════════════════════════════════════════════════════
-# LOAD SHAPEFILE & DỮ LIỆU
-# ══════════════════════════════════════════════════════════════════════════════
 
 @st.cache_resource(show_spinner=False)
 def load_shapefiles():
@@ -881,10 +847,6 @@ def get_commune_lonlat(commune_name, commune_lonlat_map):
     if not col_key or not commune_lonlat_map: return None, None
     return commune_lonlat_map.get(col_key.lower(), (None, None))
 
-# ══════════════════════════════════════════════════════════════════════════════
-# NETCDF & MEMBER DATA
-# ══════════════════════════════════════════════════════════════════════════════
-
 @st.cache_data(ttl=1800, show_spinner=False)
 def fetch_available_periods() -> list:
     try:
@@ -931,7 +893,6 @@ def load_nc_data(nc_bytes: bytes, month_idx: int):
         except: pass
         return None, None, None, str(e)
 
-# PROBABILITY
 XACSUAT_CATEGORY_PREFIX = {"thap_hon": "XSHC", "xap_xi": "XSCC", "cao_hon": "XSVC"}
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -1060,10 +1021,6 @@ def _extract_decadal_mean(nc_bytes, month_idx, decade_idx, is_sum=False):
         except: pass
         return None
 
-# ══════════════════════════════════════════════════════════════════════════════
-# RISK COMPUTATION
-# ══════════════════════════════════════════════════════════════════════════════
-
 def compute_pig_thi(T, RH):
     if T is None or RH is None: return None
     return round((1.8 * T + 32) - ((0.55 - 0.0055 * RH) * (1.8 * T - 26)), 1)
@@ -1098,13 +1055,11 @@ def compute_decade_risks(df_decadal):
         RH = row.get("RH2m", 75)
         R = row.get("R")
 
-        # Rủi ro Lúa
         stage_lua = LUA_GROWTH_STAGES.get(decade, "")
         t_risk_lua = temp_to_risk_lua(T, stage_lua) if stage_lua else 0
         r_risk_lua = rain_to_risk(R) if stage_lua and stage_lua != "Nghỉ" else 0
         risks["Lúa"][decade] = max(t_risk_lua, r_risk_lua)
 
-        # Rủi ro 4 loại Rau
         for crop_name, stages_dict, t_min, t_max in [
             ("Bắp cải", BAPCAI_GROWTH_STAGES, 10, 28),
             ("Súp lơ", SUPLO_GROWTH_STAGES, 10, 25),
@@ -1120,11 +1075,9 @@ def compute_decade_risks(df_decadal):
             r_risk = rain_to_risk(R) if stage and stage not in ["Nghỉ", "Làm đất", "Đất trống"] else 0
             risks[crop_name][decade] = max(t_risk, r_risk)
 
-        # Rủi ro Lợn
         thi = compute_pig_thi(T, RH if RH else 75)
         risks["Lợn"][decade] = thi_to_risk_pig(thi)
 
-        # Rủi ro Gà
         t_risk_ga = 0
         if T is not None:
             if T > 35: t_risk_ga = 3
@@ -1134,10 +1087,6 @@ def compute_decade_risks(df_decadal):
 
     return risks
 
-# ──────────────────────────────────────────────────────────────────────────────
-# LỌC RAU THEO MÙA VỤ ("mùa nào rau nấy")
-# ──────────────────────────────────────────────────────────────────────────────
-
 VEGETABLE_GROWTH_STAGES = {
     "Bắp cải":   BAPCAI_GROWTH_STAGES,
     "Súp lơ":    SUPLO_GROWTH_STAGES,
@@ -1145,26 +1094,13 @@ VEGETABLE_GROWTH_STAGES = {
     "Bí xanh":   BIXANH_GROWTH_STAGES,
 }
 
-# Các nhãn giai đoạn không tính là "đang canh tác" (đất trống / nghỉ vụ)
 _OFF_SEASON_STAGES = {"Nghỉ", "Làm đất", "Đất trống", ""}
 
 def get_active_crops(crops, active_decades):
-    """
-    Lọc danh sách cây trồng/vật nuôi theo MÙA VỤ – "mùa nào rau nấy".
-    Với 4 loại rau (Bắp cải, Súp lơ, Dưa chuột, Bí xanh): chỉ giữ lại trong bản tin
-    nếu có ít nhất 1 giai đoạn sinh trưởng thực sự (khác Nghỉ/Làm đất/Đất trống)
-    rơi vào các kỳ thập (active_decades) của giai đoạn dự báo đang chọn.
-    Ví dụ: Bắp cải chỉ trồng vụ Đông Xuân (T9 → T1) nên sẽ tự ẩn nếu kỳ dự báo
-    rơi vào mùa hè, và tự hiện lại khi kỳ dự báo rơi vào mùa đông.
-    Lúa, Lợn, Gà KHÔNG bị lọc theo cơ chế này (giữ nguyên hành vi cũ).
-
-    Trả về: (danh_sach_dang_vao_vu, danh_sach_trai_vu_da_an)
-    """
     active_crops, hidden_crops = [], []
     for crop in crops:
         stages = VEGETABLE_GROWTH_STAGES.get(crop)
         if stages is None:
-            # Không phải 1 trong 4 loại rau theo mùa -> giữ nguyên, không lọc
             active_crops.append(crop)
             continue
         is_in_season = any(stages.get(d, "Nghỉ") not in _OFF_SEASON_STAGES for d in active_decades)
@@ -1174,17 +1110,7 @@ def get_active_crops(crops, active_decades):
             hidden_crops.append(crop)
     return active_crops, hidden_crops
 
-# ══════════════════════════════════════════════════════════════════════════════
-# CHART & TABLES
-# ══════════════════════════════════════════════════════════════════════════════
-
 def _group_consecutive_months(months_sorted):
-    """
-    v1.5.4 — Gom các tháng dự báo liền kề thành từng đoạn liên tục, để vẽ MỖI đoạn
-    bằng 1 khung chữ nhật riêng (vd tháng dự báo 7,8,9 -> 1 khung; nếu có trường hợp
-    đứt quãng thì tách thành nhiều khung). Trục tháng của biểu đồ là Th1→Th12 cố định
-    theo năm dương lịch nên không cần xử lý vòng lặp qua năm.
-    """
     if not months_sorted: return []
     segments, cur = [], [months_sorted[0]]
     for m in months_sorted[1:]:
@@ -1201,30 +1127,23 @@ def build_climate_normal_chart(commune_name, df_r, df_t, forecast_months):
     months_vn = ["Th1","Th2","Th3","Th4","Th5","Th6","Th7","Th8","Th9","Th10","Th11","Th12"]
     R_vals = [clim.get(m, {}).get("R", 0) for m in range(1, 13)]
     T_vals = [clim.get(m, {}).get("T", 0) for m in range(1, 13)]
-    x_nums = list(range(1, 13))  # v1.5.4 — trục số nguyên 1..12 để đặt khung chính xác theo tháng
+    x_nums = list(range(1, 13))
 
     fig = go.Figure()
-    # v1.5.4 — Bỏ tô đỏ cột tháng dự báo, TẤT CẢ cột lượng mưa dùng ĐÚNG 1 màu (đồng
-    # bộ với màu chú thích "Lượng mưa"); việc đánh dấu tháng dự báo chuyển sang khung
-    # chữ nhật (shape) tự động khoanh vùng bên dưới — không cần tô màu thủ công nữa.
     fig.add_trace(go.Bar(x=x_nums, y=R_vals, name="Lượng mưa", marker_color="#1D9BC9", yaxis="y1", hovertemplate="Mưa: %{y:.0f} mm<extra></extra>"))
     fig.add_trace(go.Scatter(x=x_nums, y=T_vals, name="Nhiệt độ", mode="lines+markers", line=dict(color="#f4511e", width=2.5), marker=dict(color="#f4511e", size=7), yaxis="y2", hovertemplate="Nhiệt độ: %{y:.1f}°C<extra></extra>"))
 
-    # v1.5.4 — Khung chữ nhật TỰ ĐỘNG khoanh vùng tháng dự báo (thay cho việc tô màu
-    # cột thủ công). Khung được tính lại mỗi lần forecast_months thay đổi (đổi kỳ dự
-    # báo/hạn dự báo ở trên) nên luôn "tự chạy" theo đúng tháng đang dự báo.
     shapes, annotations = [], []
     if forecast_months:
         segments = _group_consecutive_months(sorted(set(forecast_months)))
         for seg in segments:
             x0, x1 = seg[0] - 0.5, seg[-1] + 0.5
-            # Khung ngoài mờ tạo hiệu ứng "phát sáng" + khung trong nét đứt nổi bật
             shapes.append(dict(type="rect", xref="x", yref="paper", x0=x0, x1=x1, y0=0.0, y1=1.0,
                                 line=dict(width=0), fillcolor="rgba(244,81,30,0.07)", layer="below"))
             shapes.append(dict(type="rect", xref="x", yref="paper", x0=x0, x1=x1, y0=0.02, y1=0.98,
                                 line=dict(color="#f4511e", width=2, dash="dash"), fillcolor="rgba(0,0,0,0)", layer="above"))
             annotations.append(dict(x=(x0 + x1) / 2, y=1.0, yref="paper", yshift=14, showarrow=False,
-                                     text="Giai đoạn dự báo", font=dict(size=9.5, color="#f4511e", family="Arial"), xanchor="center"))
+                                    text="Giai đoạn dự báo", font=dict(size=9.5, color="#f4511e", family="Arial"), xanchor="center"))
 
     fig.update_layout(
         title=dict(text="<b>Đặc trưng khí hậu trung bình nhiều năm (1981–2024)</b>", font=dict(size=13, family="Arial"), x=0.5, xanchor="center"),
@@ -1292,10 +1211,6 @@ def render_risk_table(crop_name, decades, decade_risks, growth_stages=None, dise
     html += '</tbody></table>'
     return html
 
-# ══════════════════════════════════════════════════════════════════════════════
-# MAP RENDERING FUNCTIONS
-# ══════════════════════════════════════════════════════════════════════════════
-
 def _idw_knn(xi, yi, zi, query_xy, k=12, power=3.0, eps=1e-12):
     tree = cKDTree(np.column_stack([xi, yi]))
     dists, idxs = tree.query(query_xy, k=min(k, xi.size))
@@ -1311,17 +1226,6 @@ def _idw_knn(xi, yi, zi, query_xy, k=12, power=3.0, eps=1e-12):
     return out
 
 def _mask_points_in_polygon(poly, xs_flat, ys_flat):
-    """
-    v1.5.3 — Kiểm tra điểm nằm trong polygon với tốc độ NHANH NHẤT có thể.
-    Trước đây code luôn thử `shapely.vectorized.contains` rồi mới fallback,
-    nhưng trên một số môi trường deploy (thiếu GEOS tối ưu / bản shapely khác)
-    bước đó có thể rơi vào nhánh dự phòng CHẬM (vòng lặp Python từng điểm —
-    có thể mất 1–2 giây cho lưới 400x400, đây chính là nguyên nhân "nội suy
-    rất chậm"). Hàm này thử lần lượt 3 cách, ưu tiên cách nhanh nhất trước:
-      1) shapely.contains_xy   – API chính thức, nhanh nhất, có từ Shapely ≥2.0
-      2) shapely.vectorized.contains – nhanh, dùng cho Shapely cũ hơn
-      3) vòng lặp prepared-geometry – chậm, chỉ dùng khi 2 cách trên đều lỗi
-    """
     try:
         import shapely as _shapely_top
         if hasattr(_shapely_top, "contains_xy"):
@@ -1355,11 +1259,6 @@ def _mpl_to_plotly(cmap_name, n=128):
     pos = np.linspace(0, 1, n)
     return [[p, f"rgb({int(r*255)},{int(g*255)},{int(b*255)})"] for p, (r, g, b, _) in zip(pos, [cmap(v) for v in pos])]
 
-
-# v1.5.0 — Bảng màu "nền bản đồ" mô phỏng (đổi tông nền + màu ranh giới của khung vẽ,
-# tương tự lựa chọn "Bản đồ nền: Mặc định / Google địa hình / ESRI Vệ tinh / ESRI Đường phố"
-# của kichban.imh.ac.vn — do môi trường không gọi được basemap tile ngoài, ta mô phỏng
-# bằng cách đổi màu nền + màu viền cho phù hợp phong cách từng loại nền).
 MAP_BASEMAP_STYLES = {
     "Mặc định":        {"bg": "#ffffff", "border": "#0B4C7A", "grid": "rgba(180,180,180,0.35)"},
     "Địa hình":        {"bg": "#f3ecd9", "border": "#5b4636", "grid": "rgba(120,100,70,0.30)"},
@@ -1368,7 +1267,7 @@ MAP_BASEMAP_STYLES = {
 }
 
 def build_figure(lons, lats, vals, meta, title, boundary_data, show_xa,
-                  basemap_style="Mặc định", layer_opacity=0.90, show_grid=True, grid_step=None):
+                 basemap_style="Mặc định", layer_opacity=0.90, show_grid=True, grid_step=None):
     bounds = boundary_data.get("bounds", (106.3, 20.6, 108.3, 21.8))
     minx, miny, maxx, maxy = bounds
     ok = ((lons >= minx - 1.5) & (lons <= maxx + 1.5) & (lats >= miny - 1.5) & (lats <= maxy + 1.5))
@@ -1401,8 +1300,6 @@ def build_figure(lons, lats, vals, meta, title, boundary_data, show_xa,
         label_color = "#ffffff" if basemap_style == "Vệ tinh (mô phỏng)" else "#111111"
         fig.add_trace(go.Scatter(x=boundary_data["xa_lx"], y=boundary_data["xa_ly"], mode="text", text=boundary_data["xa_texts"], textfont=dict(size=9, color=label_color), textposition="middle center", hoverinfo="skip", visible=xa_visible, name="Tên xã", legendgroup="xa_label"))
 
-    # v1.5.0 — Lưới toạ độ: bật/tắt + khoảng cách lưới (dtick) tuỳ chọn, tham khảo
-    # mục "Lưới tọa độ / Khoảng cách: Tự động, 30°, 10°, 5°, 1°" của kichban.imh.ac.vn
     xaxis_kwargs = dict(title="Kinh độ (°E)", range=[minx-0.12, maxx+0.12], fixedrange=True, scaleanchor="y", scaleratio=1, constrain="domain", showgrid=show_grid, gridcolor=style["grid"])
     yaxis_kwargs = dict(title="Vĩ độ (°N)", range=[miny-0.12, maxy+0.12], fixedrange=True, showgrid=show_grid, gridcolor=style["grid"])
     if show_grid and grid_step:
@@ -1437,14 +1334,6 @@ def display_panel(state_key):
     st.plotly_chart(result["fig"], use_container_width=True, config={"scrollZoom": False, "displayModeBar": True, "modeBarButtonsToRemove": ["zoom2d","pan2d","zoomIn2d","zoomOut2d","autoScale2d","resetScale2d","lasso2d","select2d"], "toImageButtonOptions": {"format": "png", "filename": result["filename"], "scale": 2}})
     st.caption("💡 Hover vào bản đồ để xem giá trị. Bấm legend để ẩn/hiện lớp xã.")
 
-# ══════════════════════════════════════════════════════════════════════════════
-# v1.5.2 — MODULE "DỰ BÁO KHÍ HẬU MÙA": KHUNG ĐIỀU KHIỂN + BẢN ĐỒ (dạng dashboard)
-#   Thiết kế lại theo bố cục khoa học: 1 cột điều khiển cố định bên trái (chọn biến
-#   theo nhóm + tuỳ chọn hiển thị bản đồ), 1 vùng bản đồ lớn bên phải. Bỏ hẳn cách
-#   dùng st.tabs bọc 2 st.fragment độc lập (gây hiện tượng UI bị lặp/chồng nội dung
-#   khi Streamlit rerun fragment không đúng vị trí tab đang ẩn).
-# ══════════════════════════════════════════════════════════════════════════════
-
 GRID_STEP_OPTIONS = {"Tự động": None, "1°": 1, "0.5°": 0.5, "0.25°": 0.25}
 
 @st.fragment
@@ -1456,7 +1345,6 @@ def _map_fragment(tab_key, var_groups, var_dict, type_label, period, month_idx, 
         with st.container(border=True):
             st.markdown(f'<div class="map-type-badge">{type_label}</div>', unsafe_allow_html=True)
 
-            # ── 1) Chọn biến theo nhóm ──
             st.markdown('<div class="panel-title">🧬 Biến hiển thị</div>', unsafe_allow_html=True)
             group_names = list(var_groups.keys())
             sel_group = st.selectbox("Nhóm biến", group_names, key=f"group_{tab_key}", label_visibility="collapsed")
@@ -1465,7 +1353,6 @@ def _map_fragment(tab_key, var_groups, var_dict, type_label, period, month_idx, 
 
             st.markdown('<hr class="panel-sep">', unsafe_allow_html=True)
 
-            # ── 2) Tuỳ chọn hiển thị bản đồ ──
             st.markdown('<div class="panel-title">🛠️ Tuỳ chọn bản đồ</div>', unsafe_allow_html=True)
             basemap_style = st.selectbox("Nền bản đồ", list(MAP_BASEMAP_STYLES.keys()), key=f"basemap_{tab_key}")
             show_xa = st.toggle("Hiển thị ranh giới xã", value=False, key=f"showxa_{tab_key}")
@@ -1480,7 +1367,7 @@ def _map_fragment(tab_key, var_groups, var_dict, type_label, period, month_idx, 
     with col_map:
         if draw_clicked:
             render_var_panel(sel, var_dict[sel], period, month_idx, boundary_data, month_labels, state_key, show_xa,
-                              basemap_style, layer_opacity, show_grid, grid_step)
+                             basemap_style, layer_opacity, show_grid, grid_step)
         if st.session_state.get(state_key):
             display_panel(state_key)
         else:
@@ -1489,7 +1376,6 @@ def _map_fragment(tab_key, var_groups, var_dict, type_label, period, month_idx, 
                 '<div>Chọn biến khí hậu và bấm <b>"Vẽ bản đồ"</b> để hiển thị kết quả nội suy tại đây.</div></div>',
                 unsafe_allow_html=True,
             )
-
 
 def _geom_to_xy_list(gdf):
     all_x, all_y = [], []
@@ -1532,10 +1418,6 @@ def build_commune_map_figure(commune_name, gdf_xa_all):
     fig.update_layout(**layout_kwargs)
     return fig
 
-# ══════════════════════════════════════════════════════════════════════════════
-# HTML EXPORT
-# ══════════════════════════════════════════════════════════════════════════════
-
 def _fig_to_html_div(fig, div_id, export_height=None, export_width=None):
     if not fig: return ""
     try:
@@ -1552,13 +1434,10 @@ def _fig_to_html_div(fig, div_id, export_height=None, export_width=None):
         return f"{m.group(1)}<script>(function() {{ function __renderWhenReady() {{ if (window.Plotly) {{ {m.group(2)} }} else {{ setTimeout(__renderWhenReady, 50); }} }} __renderWhenReady(); }})(); </script>{m.group(3)}"
     except Exception: return ""
 
-# v1.5.0 — Thông số khổ giấy cho hộp thoại "Xuất bản tin chất lượng cao"
-# (tham khảo hộp thoại "Xuất bản đồ chất lượng cao" của kichban.imh.ac.vn:
-#  Khổ giấy A4/A3, Độ phân giải DPI, Logo cơ quan)
 EXPORT_PAPER_SIZES_MM = {"A4": (210, 297), "A3": (297, 420)}
 
 def build_full_bulletin_html(commune_name, crops, period, month_labels, df_r, df_t, df_decadal, xacsuat_data, gdf_xa, active_decades, decade_risks, start_m, end_m, yr, mo,
-                              paper_size="A4", dpi=300, include_logo=True):
+                             paper_size="A4", dpi=300, include_logo=True):
     forecast_months = [((mo + offset - 1) % 12) + 1 for offset in range(1, 4)]
     map_div = _fig_to_html_div(build_commune_map_figure(commune_name, gdf_xa), "export_map_div", export_height=300, export_width=260)
     clim_div = _fig_to_html_div(build_climate_normal_chart(commune_name, df_r, df_t, forecast_months), "export_clim_div", export_height=300, export_width=680)
@@ -1639,9 +1518,6 @@ def build_full_bulletin_html(commune_name, crops, period, month_labels, df_r, df
         """
 
     plotly_cdn = "https://cdn.plot.ly/plotly-2.32.0.min.js"
-
-    # v1.5.0 — Khổ giấy A4/A3 áp dụng cho @media print + hiển thị DPI trong ghi chú xuất bản;
-    # logo cơ quan chèn tuỳ chọn ở góc header (nếu bật include_logo và đã có INSTITUTE_LOGO_URL)
     paper_w_mm, paper_h_mm = EXPORT_PAPER_SIZES_MM.get(paper_size, EXPORT_PAPER_SIZES_MM["A4"])
     logo_header_html = f'<img src="{INSTITUTE_LOGO_URL}" alt="Logo" style="height:34px;width:34px;object-fit:contain;border-radius:5px;vertical-align:middle;margin-right:8px;">' if (include_logo and INSTITUTE_LOGO_URL) else ""
 
@@ -1712,8 +1588,6 @@ def build_full_bulletin_html(commune_name, crops, period, month_labels, df_r, df
 </body></html>"""
 
 def render_export_button(commune_name, crops, period, month_labels, df_r, df_t, df_decadal, xacsuat_data, gdf_xa, active_decades, decade_risks, start_m, end_m, yr, mo, button_key):
-    # v1.5.0 — Hộp thoại "Xuất bản tin chất lượng cao" (tham khảo hộp thoại
-    # "Xuất bản đồ chất lượng cao" của kichban.imh.ac.vn): khổ giấy A4/A3, DPI, logo cơ quan
     popover_fn = st.popover if hasattr(st, "popover") else None
     if popover_fn:
         with popover_fn("📤 Export bản tin", use_container_width=False):
@@ -1738,10 +1612,6 @@ def render_export_button(commune_name, crops, period, month_labels, df_r, df_t, 
         b64 = base64.b64encode(html_doc.encode("utf-8")).decode("ascii")
         components.html(f"""<script>(function() {{ const b64 = "{b64}"; const byteChars = atob(b64); const byteNumbers = new Array(byteChars.length); for (let i = 0; i < byteChars.length; i++) {{ byteNumbers[i] = byteChars.charCodeAt(i); }} const byteArray = new Uint8Array(byteNumbers); const blob = new Blob([byteArray], {{type: 'text/html;charset=utf-8'}}); const url = URL.createObjectURL(blob); window.open(url, '_blank'); }})();</script>""", height=0)
         st.success(f"✅ Đã tạo bản tin ({paper_size}, {dpi} DPI) và mở trong tab mới. Nếu trình duyệt chặn pop-up, vui lòng cho phép pop-up cho trang này rồi bấm lại.")
-
-# ══════════════════════════════════════════════════════════════════════════════
-# RENDER BẢN TIN XÃ
-# ══════════════════════════════════════════════════════════════════════════════
 
 def render_commune_bulletin(commune_name, crops, period, month_labels, df_r, df_t, df_decadal, xacsuat_data, gdf_xa=None):
     yr, mo = int(period[:4]), int(period[4:])
@@ -1850,11 +1720,6 @@ def render_commune_bulletin(commune_name, crops, period, month_labels, df_r, df_
         st.markdown(render_risk_table(crop, active_decades, decade_risks, gs, diseases), unsafe_allow_html=True)
         st.markdown('<div style="font-size:11px; margin:-6px 0 10px 0;"><span style="background:#c8f7c5; padding:2px 8px; margin-right:6px; border-radius:3px;">■ Thấp</span><span style="background:#fff176; padding:2px 8px; margin-right:6px; border-radius:3px;">■ Trung bình (TB)</span><span style="background:#ff8a65; padding:2px 8px; margin-right:6px; border-radius:3px;">■ Cao</span><span style="background:#f0f0f0; padding:2px 8px; border-radius:3px;">■ Không áp dụng</span></div>', unsafe_allow_html=True)
 
-# ══════════════════════════════════════════════════════════════════════════════
-# v1.5.0 — THANH MENU NGANG TRÊN CÙNG (tham khảo header của kichban.imh.ac.vn:
-# Trang chủ / Giới thiệu / Hướng dẫn / Liên hệ)
-# ══════════════════════════════════════════════════════════════════════════════
-
 TOPNAV_ITEMS = [
     ("🏠 Trang chủ", "🏠 Trang chủ"),
     ("💬 Liên hệ", "💬 Phản hồi"),
@@ -1864,20 +1729,10 @@ def render_topnav_bar(active_menu):
     links_html = ""
     for label, target_menu in TOPNAV_ITEMS:
         cls = "active" if target_menu == active_menu else ""
-        # Dùng liên kết dạng query param để đồng bộ với sidebar (radio) qua session_state
         links_html += f'<a class="{cls}" href="?goto={target_menu.split(" ",1)[1] if " " in target_menu else target_menu}" target="_self">{label}</a>'
     st.markdown(f'<div class="topnav-bar">{links_html}</div>', unsafe_allow_html=True)
 
-# ══════════════════════════════════════════════════════════════════════════════
-# CÁC TRANG CHÍNH
-# ══════════════════════════════════════════════════════════════════════════════
-
 def page_trang_chu():
-    # ── Lưu ý: khối "logo Viện + tên Viện" trước đây đặt riêng ở Trang chủ đã được
-    # thay bằng THANH TIÊU ĐỀ CỐ ĐỊNH toàn cục (render_fixed_top_header, gọi 1 lần
-    # ở đầu file) — hiển thị đồng nhất trên mọi module, không chỉ riêng Trang chủ. ──
-
-    # ── Banner ảnh nền Quảng Ninh ──
     st.markdown(f"""
     <div class="hero-banner" style="background-image:url('{TONGQUAN_BG_URL}');">
         <div class="hero-content">
@@ -1887,7 +1742,6 @@ def page_trang_chu():
     </div>
     """, unsafe_allow_html=True)
 
-    # ── Mục tiêu của nhiệm vụ ──
     st.markdown("""
     <div class="objective-card">
                 <h3> Mục tiêu </h3>
@@ -1916,7 +1770,6 @@ def page_du_bao():
 
     periods_desc = list(reversed(periods)); yr_mo_labels = [f"{p[:4]}/{p[4:]}" for p in periods_desc]
 
-    # ── Thanh điều khiển chung: Kỳ dự báo / Hạn dự báo / Loại chuẩn sai ──
     with st.container(border=True):
         col1, col2, col3 = st.columns([1.3, 1.3, 1.6])
         with col1:
@@ -1932,13 +1785,10 @@ def page_du_bao():
 
     st.markdown("<div style='height:6px;'></div>", unsafe_allow_html=True)
 
-    # v1.5.2 — Chỉ gọi 1 fragment tương ứng loại đang chọn (thay cho st.tabs bọc 2
-    # fragment song song trước đây), tránh hiện tượng UI bị lặp nội dung khi rerun.
     if map_type.startswith("🌡️"):
         _map_fragment("c", CLIMATE_VAR_GROUPS, CLIMATE_VARS, "🌡️ Chuẩn sai dự báo khí hậu", sel_period, month_idx, boundary_data, month_labels)
     else:
         _map_fragment("e", EXTREME_VAR_GROUPS, EXTREME_VARS, "⚠️ Chuẩn sai dự báo cực đoan", sel_period, month_idx, boundary_data, month_labels)
-
 
 def page_ban_tin_xa():
     st.markdown('<div class="module-header">📋 Bản tin cảnh báo rủi ro khí hậu</div>', unsafe_allow_html=True)
@@ -1966,7 +1816,6 @@ def page_ban_tin_xa():
     decade_risks = compute_decade_risks(df_decadal)
     start_m, end_m = month_labels[0].replace("Tháng ", ""), month_labels[-1].replace("Tháng ", "")
 
-    # 🌱 Mùa nào rau nấy: tự động ẩn rau trái vụ, hiện rau đang vào vụ theo kỳ dự báo
     crops, crops_hidden = get_active_crops(crops, active_decades)
 
     with col2:
@@ -2000,7 +1849,6 @@ with st.sidebar:
     menu = st.radio("📌 Chọn module:", ["🏠 Trang chủ", "🔄 Dự báo khí hậu mùa", "📋 Bản tin cảnh báo rủi ro khí hậu", "💾 Bản tin đã lưu", "📤 Export bản tin", "💬 Phản hồi"], label_visibility="collapsed")
     st.markdown("---\nPhòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu\n - Viện Khoa học Khí tượng Thủy văn Môi trường và Biển\n---\n*Phiên bản 1.5.6 – 07/2026*")
 
-# v1.5.1 — Thanh menu ngang trên cùng, hiển thị phía trên nội dung mọi trang
 render_topnav_bar(menu)
 
 if   menu == "🏠 Trang chủ":                          page_trang_chu()
