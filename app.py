@@ -1881,8 +1881,7 @@ def page_phan_hoi():
             </div>
             <hr style="border:none; border-top: 1px dashed #cfe3ea; margin: 24px 0;">
             <div style="font-size: 0.86rem; color: #64748b; line-height: 1.5;">
-            <i>* Mọi ý kiến đóng góp về hệ thống bản tin rủi ro khí hậu nông nghiệp tỉnh Quảng Ninh xin vui lòng điền vào biểu mẫu bên cạnh. Đội ngũ phát triển sẽ tiếp nhận và phản hồi trong thời gian sớm nhất.</i>
-            </div>
+            <div>* Mọi ý kiến đóng góp về hệ thống bản tin rủi ro khí hậu nông nghiệp tỉnh Quảng Ninh xin vui lòng điền vào biểu mẫu bên cạnh. Đội ngũ phát triển sẽ tiếp nhận và phản hồi trong thời gian sớm nhất.</i></div>
         </div>
         """, unsafe_allow_html=True)
         
