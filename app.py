@@ -103,6 +103,10 @@ THAY ĐỔI v1.7.0 – MODULE PHẢN HỒI (LIÊN HỆ):
          của kichban.imh.ac.vn (2 cột: Thông tin liên hệ và Biểu mẫu góp ý)
   [NEW]  Thêm card thông tin chi tiết (địa chỉ, SĐT, email) của Viện KHKTTVMT&B
   [NEW]  Tạo biểu mẫu phản hồi trực quan (st.form) có tính năng kiểm tra lỗi (validation)
+THAY ĐỔI v1.7.1 – MODULE PHẢN HỒI (ĐỊNH DẠNG VĂN BẢN):
+  [FIX]  Thêm dấu ngắt dòng (<br>) cho đoạn văn bản ghi chú ý kiến đóng góp giúp giao diện cân đối, dễ nhìn
+THAY ĐỔI v1.7.2 – SỬA LỖI TYPO (CACHE_DATA):
+  [FIX]  Sửa lỗi đánh máy `show_gradient=False` thành `show_spinner=False` trong hàm `load_era5_data` gây crash ứng dụng.
 """
 
 import streamlit as st
@@ -1877,11 +1881,11 @@ def page_phan_hoi():
             </div>
             <div class="contact-info-item">
                 <div class="icon">🌐</div>
-                <div><a href="https://imh.ac.vn/" target="_blank" style="color: #1D9BC9; text-decoration: none; font-weight: 600;">https://imh.ac.vn/</a><br>
+                <div><a href="https://imh.ac.vn/" target="_blank" style="color: #1D9BC9; text-decoration: none; font-weight: 600;">https://imh.ac.vn/</a></div>
             </div>
             <hr style="border:none; border-top: 1px dashed #cfe3ea; margin: 24px 0;">
             <div style="font-size: 0.86rem; color: #64748b; line-height: 1.5;">
-            <i>* Mọi ý kiến đóng góp về hệ thống bản tin rủi ro khí hậu nông nghiệp tỉnh Quảng Ninh xin vui lòng điền vào biểu mẫu bên cạnh. Đội ngũ phát triển sẽ tiếp nhận và phản hồi trong thời gian sớm nhất.</i>
+                <i>* Mọi ý kiến đóng góp về hệ thống bản tin rủi ro khí hậu nông nghiệp tỉnh Quảng Ninh xin vui lòng điền vào biểu mẫu bên cạnh.<br>Đội ngũ phát triển sẽ tiếp nhận và phản hồi trong thời gian sớm nhất.</i>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -1915,7 +1919,7 @@ def page_phan_hoi():
 with st.sidebar:
     st.markdown("## 🌾 Bản tin Khí hậu\n**Quảng Ninh – Nông nghiệp**\n---")
     menu = st.radio("📌 Chọn module:", ["🏠 Trang chủ", "🔄 Dự báo khí hậu mùa", "📋 Bản tin cảnh báo rủi ro khí hậu", "💾 Bản tin đã lưu", "📤 Export bản tin", "💬 Phản hồi"], label_visibility="collapsed")
-    st.markdown("---\nPhòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu\n - Viện Khoa học Khí tượng Thủy văn Môi trường và Biển\n---\n*Phiên bản 1.7.0 – 07/2026*")
+    st.markdown("---\nPhòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu\n - Viện Khoa học Khí tượng Thủy văn Môi trường và Biển\n---\n*Phiên bản 1.7.2 – 07/2026*")
 
 render_topnav_bar(menu)
 
