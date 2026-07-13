@@ -132,6 +132,14 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# ── Thông tin cơ quan / logo dùng cho header cố định (đặt sớm vì được dùng
+#    ngay trong render_top_org_banner() bên dưới, trước khi tới khối HẰNG SỐ) ──
+INSTITUTE_LOGO_URL  = "https://raw.githubusercontent.com/phanvuanh216-arch/DT_QN/main/logo/logo_vien.jpg"
+INSTITUTE_NAME      = "Viện Khoa học Khí tượng Thủy văn Môi trường và Biển"
+DOST_QUANGNINH_URL  = "https://www.quangninh.gov.vn/so/sokhoahoccongnghe/trang/default.aspx"
+# v1.6.0 — Logo Quốc huy Việt Nam, dùng cho khối bên phải (Sở KH&CN) của header cố định
+DOST_LOGO_URL       = "https://raw.githubusercontent.com/phanvuanh216-arch/DT_QN/main/logo/Quoc_Huy_Viet_Nam_Chuan.png"
+
 st.markdown("""
 <style>
     .block-container { padding-top: 0.5rem !important; padding-bottom: 1rem !important; }
@@ -339,8 +347,96 @@ st.markdown("""
         padding: 10px 14px; box-shadow: 0 3px 10px rgba(11,76,122,0.08);
     }
     table { box-shadow: 0 2px 10px rgba(11,76,122,0.06); border-radius: 8px; overflow: hidden; }
+
+    /* ══════════════════════════════════════════════════════════════════════
+       v1.6.0 — HEADER TỔ CHỨC CỐ ĐỊNH (PIN) TRÊN CÙNG — áp dụng cho MỌI module
+       2 khối logo + tên cơ quan: Viện (trái) / Sở KH&CN tỉnh Quảng Ninh (phải)
+       ══════════════════════════════════════════════════════════════════════ */
+    .top-org-banner {
+        position: fixed; top: 0; left: 0; right: 0; z-index: 999996;
+        display: flex; align-items: stretch; height: 96px;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.28);
+    }
+    .top-org-banner .org-half {
+        flex: 1 1 50%; display: flex; align-items: center; justify-content: center;
+        gap: 16px; padding: 10px 22px; position: relative;
+        text-decoration: none !important; transition: filter 0.15s;
+    }
+    .top-org-banner .org-half-left  { background: #17264a; }
+    .top-org-banner .org-half-right { background: #1c3a70; }
+    .top-org-banner .org-half-left::after {
+        content: ""; position: absolute; top: 16px; bottom: 16px; right: 0; width: 1px;
+        background: rgba(255,255,255,0.18);
+    }
+    .top-org-banner .org-half:hover { filter: brightness(1.12); }
+    .top-org-banner .org-half img {
+        height: 60px; width: 60px; object-fit: contain; border-radius: 50%;
+        background: #ffffff; padding: 4px; flex-shrink: 0;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    }
+    .top-org-banner .org-logo-fallback {
+        height: 60px; width: 60px; flex-shrink: 0; display: flex; align-items: center;
+        justify-content: center; background: #ffffff; border-radius: 50%; overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    }
+    .top-org-banner .org-half-text { color: #ffffff; text-align: left; line-height: 1.34; }
+    .top-org-banner .org-half-line1,
+    .top-org-banner .org-half-line2 {
+        font-size: 0.98rem; font-weight: 800; letter-spacing: 0.3px; text-transform: uppercase;
+    }
+
+    /* Đẩy toàn bộ nội dung (trang chính + sidebar) xuống dưới header cố định */
+    [data-testid="stAppViewContainer"] .main .block-container { padding-top: 112px !important; }
+    [data-testid="stSidebar"] > div { padding-top: 96px !important; }
+
+    /* Đẩy nút mở/đóng sidebar xuống dưới header cố định để không bị che khuất */
+    [data-testid="collapsedControl"] { top: calc(96px + 0.6rem) !important; }
 </style>
 """, unsafe_allow_html=True)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# v1.6.0 — HEADER TỔ CHỨC CỐ ĐỊNH (PIN) TRÊN CÙNG CHO MỌI MODULE
+#   2 khối logo + tên cơ quan (Viện bên trái — Sở KH&CN tỉnh Quảng Ninh bên phải).
+#   Dùng position:fixed (khai báo trong CSS .top-org-banner ở trên) nên LUÔN nằm
+#   cố định trên đầu màn hình, không phụ thuộc đang ở module nào trong sidebar
+#   (Trang chủ / Dự báo khí hậu mùa / Bản tin cảnh báo .../ Bản tin đã lưu /
+#   Export bản tin / Phản hồi) — vì hàm này được gọi 1 lần duy nhất ngay tại
+#   điểm khởi đầu của mỗi lần Streamlit chạy lại toàn bộ script (mỗi rerun).
+# ══════════════════════════════════════════════════════════════════════════════
+def render_top_org_banner():
+    if INSTITUTE_LOGO_URL:
+        inst_logo_html = f'<img src="{INSTITUTE_LOGO_URL}" alt="Logo Viện">'
+    else:
+        inst_logo_html = """<div class="org-logo-fallback">
+            <svg viewBox="0 0 48 48" width="30" height="30" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="24" cy="24" r="24" fill="#0B4C7A"/>
+                <circle cx="24" cy="15" r="5.5" fill="#FFD166"/>
+                <path d="M8 27c3-4 6-4 9 0s6 4 9 0 6-4 9 0" stroke="#ffffff" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+                <path d="M8 34c3-4 6-4 9 0s6 4 9 0 6-4 9 0" stroke="#ffffff" stroke-width="2.2" fill="none" stroke-linecap="round" opacity="0.65"/>
+            </svg>
+        </div>"""
+    dost_logo_html = f'<img src="{DOST_LOGO_URL}" alt="Quốc huy Việt Nam">' if DOST_LOGO_URL else '<div class="org-logo-fallback">🇻🇳</div>'
+
+    st.markdown(f"""
+    <div class="top-org-banner">
+        <a class="org-half org-half-left" href="{DOST_QUANGNINH_URL}" target="_blank" rel="noopener noreferrer" title="{INSTITUTE_NAME}">
+            {inst_logo_html}
+            <div class="org-half-text">
+                <div class="org-half-line1">Viện Khoa học Khí tượng</div>
+                <div class="org-half-line2">Thủy văn Môi trường và Biển</div>
+            </div>
+        </a>
+        <a class="org-half org-half-right" href="{DOST_QUANGNINH_URL}" target="_blank" rel="noopener noreferrer" title="Sở Khoa học và Công nghệ tỉnh Quảng Ninh">
+            {dost_logo_html}
+            <div class="org-half-text">
+                <div class="org-half-line1">Sở Khoa học và Công nghệ</div>
+                <div class="org-half-line2">Tỉnh Quảng Ninh</div>
+            </div>
+        </a>
+    </div>
+    """, unsafe_allow_html=True)
+
+render_top_org_banner()
 
 # ══════════════════════════════════════════════════════════════════════════════
 # FIX v1.4.2: NÚT MỞ/ĐÓNG SIDEBAR DỰ PHÒNG
@@ -385,7 +481,7 @@ components.html("""
         b.id = 'custom-sidebar-toggle';
         b.title = 'Ẩn / hiện menu';
         b.style.cssText = `
-            position: fixed; top: 0.6rem; left: 0.6rem; z-index: 2147483647;
+            position: fixed; top: calc(96px + 0.6rem); left: 0.6rem; z-index: 2147483647;
             background: linear-gradient(135deg, #1D9BC9 0%, #17B6A6 100%);
             border-radius: 8px; width: 34px; height: 34px; border: none;
             box-shadow: 0 3px 10px rgba(23,182,166,0.35); cursor: pointer;
@@ -415,11 +511,8 @@ ERA5_R_URL      = "https://raw.githubusercontent.com/phanvuanh216-arch/DT_QN/mai
 ERA5_T_URL      = "https://raw.githubusercontent.com/phanvuanh216-arch/DT_QN/main/T2m_ERA5_QM_corrected.xlsx"
 COMMUNE_LONLAT_URL = "https://raw.githubusercontent.com/phanvuanh216-arch/DT_QN/main/lon_lat_quangninh.xlsx"
 
-# Ảnh nền + thông tin header cho module "Tổng quan"
+# Ảnh nền cho module "Trang chủ"
 TONGQUAN_BG_URL    = "https://raw.githubusercontent.com/phanvuanh216-arch/DT_QN/main/anh_dep_quang_ninh_giao_dien_1.jpg"
-INSTITUTE_LOGO_URL = "https://raw.githubusercontent.com/phanvuanh216-arch/DT_QN/main/logo/logo_vien.jpg"
-INSTITUTE_NAME      = "Viện Khoa học Khí tượng Thủy văn Môi trường và Biển"
-DOST_QUANGNINH_URL  = "https://www.quangninh.gov.vn/so/sokhoahoccongnghe/trang/default.aspx"
 
 CLIMATE_VARS = {
     "ano.T2m":  {"label": "Nhiệt độ trung bình (T2m)", "unit": "°C",  "cmap": "RdBu_r", "levels": list(range(-5, 6))},
@@ -1803,30 +1896,6 @@ def render_topnav_bar(active_menu):
 # ══════════════════════════════════════════════════════════════════════════════
 
 def page_trang_chu():
-    # ── Header: logo Viện + tên Viện liên kết tới Cổng TTĐT Sở KH&CN tỉnh Quảng Ninh ──
-    if INSTITUTE_LOGO_URL:
-        logo_html = f'<img src="{INSTITUTE_LOGO_URL}" alt="Logo Viện">'
-    else:
-        # Biểu trưng mặc định (sóng biển + mặt trời) khi chưa có logo thật của Viện.
-        # Khi có logo chính thức, chỉ cần dán URL vào biến INSTITUTE_LOGO_URL ở đầu file.
-        logo_html = """<div class="org-logo-fallback">
-            <svg viewBox="0 0 48 48" width="30" height="30" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="24" cy="24" r="24" fill="#0B4C7A"/>
-                <circle cx="24" cy="15" r="5.5" fill="#FFD166"/>
-                <path d="M8 27c3-4 6-4 9 0s6 4 9 0 6-4 9 0" stroke="#ffffff" stroke-width="2.6" fill="none" stroke-linecap="round"/>
-                <path d="M8 34c3-4 6-4 9 0s6 4 9 0 6-4 9 0" stroke="#ffffff" stroke-width="2.2" fill="none" stroke-linecap="round" opacity="0.65"/>
-            </svg>
-        </div>"""
-    st.markdown(f"""
-    <div class="org-header">
-        {logo_html}
-        <div class="org-text">
-            <a href="{DOST_QUANGNINH_URL}" target="_blank" rel="noopener noreferrer">{INSTITUTE_NAME}</a>
-            <div class="org-sub">Liên kết chuyên môn với Sở Khoa học và Công nghệ tỉnh Quảng Ninh</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
     # ── Banner ảnh nền Quảng Ninh ──
     st.markdown(f"""
     <div class="hero-banner" style="background-image:url('{TONGQUAN_BG_URL}');">
