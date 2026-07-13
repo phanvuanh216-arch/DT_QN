@@ -86,6 +86,17 @@ THAY ĐỔI v1.5.5 – SỬA LỖI TRANG IN/LƯU RA SAI KHỔ GIẤY:
          297mm; }}` cho A4 (297mm × 420mm cho A3) — được hỗ trợ rộng rãi hơn
          và luôn ra đúng khổ đã chọn bất kể trình duyệt
   [NEW]  Đặt rõ mặc định "A4" (index=0) trong hộp thoại xuất bản tin
+THAY ĐỔI v1.5.6 – LÀM MỚI GIAO DIỆN (SÁNG & HIỆN ĐẠI HƠN):
+  [NEW]  Đổi bảng màu chủ đạo từ tông xanh biển đậm/tối sang tông xanh biển
+         TƯƠI SÁNG (biển ban ngày), nền trang dùng gradient pastel nhẹ thay
+         vì trắng trơn hoặc tối, giúp giao diện đỡ nặng nề hơn
+  [NEW]  Sidebar chuyển từ nền tối sang gradient xanh biển sáng, chữ trắng
+         vẫn giữ độ tương phản tốt
+  [NEW]  Thêm đổ bóng (shadow) mềm + bo góc lớn hơn cho các khối card, bảng,
+         module-header, risk-header để trông hiện đại, đỡ "phẳng/tối"
+  [NEW]  Gắn logo Viện thật (INSTITUTE_LOGO_URL) từ GitHub thay cho biểu trưng
+         mặc định
+  [KEEP] Giữ nguyên 100% logic xử lý dữ liệu, bản đồ, rủi ro, export HTML
 """
 
 import streamlit as st
@@ -132,6 +143,12 @@ st.markdown("""
     [data-testid="stDecoration"] { display: none !important; }
     [data-testid="stStatusWidget"] { visibility: hidden !important; }
 
+    /* ── v1.5.6 — Nền trang: gradient pastel nhẹ thay vì trắng/tối trơn ── */
+    [data-testid="stAppViewContainer"] {
+        background: linear-gradient(180deg, #eef7fb 0%, #f5faf8 45%, #f7fbfd 100%) !important;
+    }
+    [data-testid="stAppViewContainer"] > .main { background: transparent !important; }
+
     /* ── Đổi icon thu gọn/mở rộng sidebar (mũi tên "<<" / ">>") thành ô vuông 3 gạch ──
        CHỈ ghim position:fixed cho nút MỞ LẠI (collapsedControl) vì nút này nằm ngoài
        sidebar và bị kẹt do header đã set height:0 ở trên. Nút ĐÓNG (nằm sẵn trong
@@ -144,8 +161,8 @@ st.markdown("""
         top: 0.6rem !important;
         left: 0.6rem !important;
         z-index: 999999 !important;
-        background: linear-gradient(135deg, #073B4C 0%, #0F8B8D 100%) !important;
-        border-radius: 6px !important;
+        background: linear-gradient(135deg, #1D9BC9 0%, #17B6A6 100%) !important;
+        border-radius: 8px !important;
         width: 34px !important;
         height: 34px !important;
         min-width: 34px !important;
@@ -154,7 +171,7 @@ st.markdown("""
         align-items: center !important;
         justify-content: center !important;
         border: none !important;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.25) !important;
+        box-shadow: 0 3px 10px rgba(23,182,166,0.35) !important;
         opacity: 1 !important;
         visibility: visible !important;
     }
@@ -173,8 +190,8 @@ st.markdown("""
        Chỉ đổi màu/hình dạng, KHÔNG đổi position để giữ nguyên khả năng bấm */
     [data-testid="stSidebarCollapseButton"] button,
     [data-testid="stSidebarHeader"] button {
-        background: linear-gradient(135deg, #073B4C 0%, #0F8B8D 100%) !important;
-        border-radius: 6px !important;
+        background: linear-gradient(135deg, #1D9BC9 0%, #17B6A6 100%) !important;
+        border-radius: 8px !important;
         width: 34px !important;
         height: 34px !important;
     }
@@ -195,34 +212,37 @@ st.markdown("""
     }
 
     .module-header {
-        background: linear-gradient(135deg, #073B4C 0%, #0F8B8D 100%);
-        color: white; padding: 10px 20px; border-radius: 8px;
-        font-size: 1.1rem; font-weight: bold; margin-top: 0; margin-bottom: 8px;
+        background: linear-gradient(135deg, #1D9BC9 0%, #17B6A6 100%);
+        color: white; padding: 12px 22px; border-radius: 12px;
+        font-size: 1.1rem; font-weight: bold; margin-top: 0; margin-bottom: 12px;
         display: flex; align-items: center; gap: 8px;
+        box-shadow: 0 6px 16px rgba(23,182,166,0.25);
     }
     .risk-header {
-        background: linear-gradient(135deg, #7b2d00 0%, #c0392b 100%);
-        color: white; padding: 8px 16px; border-radius: 6px;
-        font-size: 1rem; font-weight: bold; margin: 8px 0 4px 0;
+        background: linear-gradient(135deg, #ff8a5c 0%, #f4511e 100%);
+        color: white; padding: 9px 18px; border-radius: 10px;
+        font-size: 1rem; font-weight: bold; margin: 10px 0 6px 0;
+        box-shadow: 0 4px 12px rgba(244,81,30,0.22);
     }
     .stTabs [data-baseweb="tab-list"] { gap: 6px; }
     .stTabs [data-baseweb="tab"] {
-        background-color: #e8f4f8; border-radius: 6px 6px 0 0;
+        background-color: #e8f4f8; border-radius: 8px 8px 0 0;
         padding: 8px 16px; font-weight: 600;
     }
-    .stTabs [aria-selected="true"] { background-color: #073B4C !important; color: white !important; }
-    [data-testid="stSidebar"] { background: linear-gradient(180deg, #073B4C 0%, #0b2530 100%); }
-    [data-testid="stSidebar"] * { color: #e2e8f0 !important; }
+    .stTabs [aria-selected="true"] { background-color: #17B6A6 !important; color: white !important; }
+    [data-testid="stSidebar"] { background: linear-gradient(180deg, #1D9BC9 0%, #0F6FA8 55%, #0B4C7A 100%); }
+    [data-testid="stSidebar"] * { color: #f1fbfd !important; }
     [data-testid="stSidebar"] .block-container { padding-top: 1rem !important; }
     .risk-0 { background-color: #f0f0f0 !important; color: #555 !important; }
     .risk-1 { background-color: #c8f7c5 !important; color: #1a5e20 !important; font-weight: bold; }
     .risk-2 { background-color: #fff176 !important; color: #7d6608 !important; font-weight: bold; }
     .risk-3 { background-color: #ff8a65 !important; color: #7d1f00 !important; font-weight: bold; }
     .commune-title {
-        background: linear-gradient(90deg, #073B4C, #0F8B8D);
-        color: white; padding: 8px 16px; border-radius: 8px;
-        font-size: 1.2rem; font-weight: bold; margin: 0 0 8px 0;
+        background: linear-gradient(90deg, #1D9BC9, #17B6A6);
+        color: white; padding: 10px 18px; border-radius: 12px;
+        font-size: 1.2rem; font-weight: bold; margin: 0 0 10px 0;
         text-align: center;
+        box-shadow: 0 6px 16px rgba(23,182,166,0.25);
     }
     .export-toolbar {
         display: flex; justify-content: flex-end; align-items: center;
@@ -230,42 +250,45 @@ st.markdown("""
     }
     .org-header {
         display: flex; align-items: center; gap: 12px;
-        padding: 10px 18px; margin-bottom: 12px;
-        background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px;
+        padding: 12px 20px; margin-bottom: 14px;
+        background: #ffffff; border: 1px solid #e2f0f5; border-radius: 14px;
+        box-shadow: 0 4px 14px rgba(29,155,201,0.10);
     }
     .org-header img {
-        height: 48px; width: 48px; object-fit: contain; border-radius: 6px; flex-shrink: 0;
+        height: 48px; width: 48px; object-fit: contain; border-radius: 8px; flex-shrink: 0;
     }
     .org-header .org-logo-fallback {
         height: 48px; width: 48px; flex-shrink: 0; display: flex; align-items: center;
         justify-content: center; background: #eef3f6; border-radius: 50%; overflow: hidden;
     }
     .objective-card {
-        background: #ffffff; border: 1px solid #e2e8f0; border-left: 5px solid #0F8B8D;
-        border-radius: 10px; padding: 18px 22px; margin-bottom: 18px;
+        background: #ffffff; border: 1px solid #e2f0f5; border-left: 5px solid #17B6A6;
+        border-radius: 14px; padding: 20px 24px; margin-bottom: 20px;
+        box-shadow: 0 4px 14px rgba(29,155,201,0.10);
     }
     .objective-card h2 {
-        font-size: 1.02rem; color: #073B4C; margin: 0 0 6px 0; letter-spacing: 0.2px;
+        font-size: 1.02rem; color: #0B4C7A; margin: 0 0 6px 0; letter-spacing: 0.2px;
     }
     .objective-card h3 {
-        font-size: 1rem; color: #0F8B8D; margin: 0 0 10px 0; font-weight: 700;
+        font-size: 1rem; color: #17B6A6; margin: 0 0 10px 0; font-weight: 700;
     }
     .objective-list { margin: 0; padding-left: 22px; }
     .objective-list li { margin-bottom: 10px; line-height: 1.55; font-size: 0.95rem; color: #2d3436; }
-    .objective-list li::marker { color: #0F8B8D; font-weight: bold; }
+    .objective-list li::marker { color: #17B6A6; font-weight: bold; }
     .org-header .org-text a {
-        color: #073B4C; text-decoration: none; font-weight: 700; font-size: 1.05rem;
+        color: #0B4C7A; text-decoration: none; font-weight: 700; font-size: 1.05rem;
     }
-    .org-header .org-text a:hover { color: #0F8B8D; text-decoration: underline; }
+    .org-header .org-text a:hover { color: #17B6A6; text-decoration: underline; }
     .org-header .org-sub { font-size: 0.78rem; color: #667085; margin-top: 2px; }
     .hero-banner {
-        position: relative; border-radius: 14px; overflow: hidden; margin-bottom: 18px;
+        position: relative; border-radius: 18px; overflow: hidden; margin-bottom: 20px;
         background-size: cover; background-position: center; min-height: 260px;
         display: flex; align-items: flex-end;
+        box-shadow: 0 10px 26px rgba(11,76,122,0.22);
     }
     .hero-banner::before {
         content: ""; position: absolute; inset: 0;
-        background: linear-gradient(180deg, rgba(7,59,76,0.18) 0%, rgba(4,20,26,0.82) 100%);
+        background: linear-gradient(180deg, rgba(29,155,201,0.15) 0%, rgba(11,76,122,0.80) 100%);
     }
     .hero-content { position: relative; z-index: 1; padding: 26px 28px; color: #fff; }
     .hero-content h1 { margin: 0 0 8px 0; font-size: 1.65rem; line-height: 1.3; }
@@ -274,40 +297,48 @@ st.markdown("""
     /* ══════════ v1.5.0 – Thanh menu ngang trên cùng (tham khảo kichban.imh.ac.vn) ══════════ */
     .topnav-bar {
         display: flex; align-items: center; justify-content: flex-end; gap: 4px;
-        background: #052a37; padding: 6px 18px; border-radius: 8px; margin-bottom: 10px;
+        background: linear-gradient(90deg, #0F6FA8, #17B6A6); padding: 7px 18px; border-radius: 10px; margin-bottom: 12px;
         flex-wrap: wrap;
+        box-shadow: 0 4px 12px rgba(15,111,168,0.18);
     }
     .topnav-bar a {
-        color: #cfe8ec !important; text-decoration: none !important; font-size: 0.86rem;
-        padding: 6px 12px; border-radius: 5px; font-weight: 600; transition: background 0.15s;
+        color: #eafcfa !important; text-decoration: none !important; font-size: 0.86rem;
+        padding: 6px 12px; border-radius: 6px; font-weight: 600; transition: background 0.15s;
     }
-    .topnav-bar a:hover { background: rgba(255,255,255,0.12); color: #ffffff !important; }
-    .topnav-bar a.active { background: #0F8B8D; color: #ffffff !important; }
+    .topnav-bar a:hover { background: rgba(255,255,255,0.18); color: #ffffff !important; }
+    .topnav-bar a.active { background: rgba(255,255,255,0.28); color: #ffffff !important; }
 
     /* ══════════ v1.5.0 – Bảng điều khiển bản đồ / hộp thoại export ══════════ */
     .map-toolpanel-title {
-        font-size: 0.95rem; font-weight: 700; color: #073B4C; margin-bottom: 4px;
+        font-size: 0.95rem; font-weight: 700; color: #0B4C7A; margin-bottom: 4px;
         display: flex; align-items: center; gap: 6px;
     }
 
     /* ══════════ v1.5.2 – Khung điều khiển bản đồ dạng dashboard khoa học ══════════ */
     .panel-title {
-        font-size: 0.82rem; font-weight: 800; color: #073B4C; letter-spacing: 0.3px;
+        font-size: 0.82rem; font-weight: 800; color: #0B4C7A; letter-spacing: 0.3px;
         text-transform: uppercase; margin: 2px 0 8px 0; display: flex; align-items: center; gap: 6px;
     }
-    .panel-sep { border: none; border-top: 1px dashed #cfd8dc; margin: 14px 0 12px 0; }
+    .panel-sep { border: none; border-top: 1px dashed #cfe3ea; margin: 14px 0 12px 0; }
     .map-type-badge {
-        display: inline-flex; align-items: center; gap: 6px; background: #e8f4f8;
-        color: #073B4C; padding: 5px 12px; border-radius: 999px; font-size: 0.82rem;
-        font-weight: 700; margin-bottom: 10px; border: 1px solid #bfe0e6;
+        display: inline-flex; align-items: center; gap: 6px; background: #e6f6f4;
+        color: #0B4C7A; padding: 5px 12px; border-radius: 999px; font-size: 0.82rem;
+        font-weight: 700; margin-bottom: 10px; border: 1px solid #bfe6df;
     }
     .map-placeholder {
         display: flex; align-items: center; justify-content: center; flex-direction: column;
-        height: 480px; border: 1.5px dashed #b9c6cc; border-radius: 10px; background: #fbfdfe;
+        height: 480px; border: 1.5px dashed #b7d8e6; border-radius: 14px; background: #fbfeff;
         color: #8a97a0; text-align: center; gap: 6px;
     }
     .map-placeholder .big { font-size: 2.1rem; }
-    [data-testid="stVerticalBlockBorderWrapper"] { border-radius: 10px !important; }
+    [data-testid="stVerticalBlockBorderWrapper"] { border-radius: 14px !important; box-shadow: 0 2px 10px rgba(11,76,122,0.06) !important; }
+
+    /* ══════════ v1.5.6 – Card/metric/table trông "sáng" & hiện đại hơn ══════════ */
+    div[data-testid="stMetric"] {
+        background: #ffffff; border: 1px solid #e2f0f5; border-radius: 12px;
+        padding: 10px 14px; box-shadow: 0 3px 10px rgba(11,76,122,0.08);
+    }
+    table { box-shadow: 0 2px 10px rgba(11,76,122,0.06); border-radius: 8px; overflow: hidden; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -355,9 +386,9 @@ components.html("""
         b.title = 'Ẩn / hiện menu';
         b.style.cssText = `
             position: fixed; top: 0.6rem; left: 0.6rem; z-index: 2147483647;
-            background: linear-gradient(135deg, #073B4C 0%, #0F8B8D 100%);
-            border-radius: 6px; width: 34px; height: 34px; border: none;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.25); cursor: pointer;
+            background: linear-gradient(135deg, #1D9BC9 0%, #17B6A6 100%);
+            border-radius: 8px; width: 34px; height: 34px; border: none;
+            box-shadow: 0 3px 10px rgba(23,182,166,0.35); cursor: pointer;
             display: flex; align-items: center; justify-content: center;
         `;
         b.innerHTML = '<span style="display:block;width:16px;height:2px;background:#fff;box-shadow:0 -5px 0 #fff,0 5px 0 #fff;"></span>';
@@ -386,7 +417,7 @@ COMMUNE_LONLAT_URL = "https://raw.githubusercontent.com/phanvuanh216-arch/DT_QN/
 
 # Ảnh nền + thông tin header cho module "Tổng quan"
 TONGQUAN_BG_URL    = "https://raw.githubusercontent.com/phanvuanh216-arch/DT_QN/main/anh_dep_quang_ninh_giao_dien_1.jpg"
-INSTITUTE_LOGO_URL = ""  # TODO: dán URL ảnh logo Viện vào đây (vd: link raw.githubusercontent.com tới file logo .png/.jpg)
+INSTITUTE_LOGO_URL = "https://raw.githubusercontent.com/phanvuanh216-arch/DT_QN/main/logo/logo_vien.jpg"
 INSTITUTE_NAME      = "Viện Khoa học Khí tượng Thủy văn Môi trường và Biển"
 DOST_QUANGNINH_URL  = "https://www.quangninh.gov.vn/so/sokhoahoccongnghe/trang/default.aspx"
 
@@ -1106,8 +1137,8 @@ def build_climate_normal_chart(commune_name, df_r, df_t, forecast_months):
     # v1.5.4 — Bỏ tô đỏ cột tháng dự báo, TẤT CẢ cột lượng mưa dùng ĐÚNG 1 màu (đồng
     # bộ với màu chú thích "Lượng mưa"); việc đánh dấu tháng dự báo chuyển sang khung
     # chữ nhật (shape) tự động khoanh vùng bên dưới — không cần tô màu thủ công nữa.
-    fig.add_trace(go.Bar(x=x_nums, y=R_vals, name="Lượng mưa", marker_color="#1565c0", yaxis="y1", hovertemplate="Mưa: %{y:.0f} mm<extra></extra>"))
-    fig.add_trace(go.Scatter(x=x_nums, y=T_vals, name="Nhiệt độ", mode="lines+markers", line=dict(color="#e65100", width=2.5), marker=dict(color="#e65100", size=7), yaxis="y2", hovertemplate="Nhiệt độ: %{y:.1f}°C<extra></extra>"))
+    fig.add_trace(go.Bar(x=x_nums, y=R_vals, name="Lượng mưa", marker_color="#1D9BC9", yaxis="y1", hovertemplate="Mưa: %{y:.0f} mm<extra></extra>"))
+    fig.add_trace(go.Scatter(x=x_nums, y=T_vals, name="Nhiệt độ", mode="lines+markers", line=dict(color="#f4511e", width=2.5), marker=dict(color="#f4511e", size=7), yaxis="y2", hovertemplate="Nhiệt độ: %{y:.1f}°C<extra></extra>"))
 
     # v1.5.4 — Khung chữ nhật TỰ ĐỘNG khoanh vùng tháng dự báo (thay cho việc tô màu
     # cột thủ công). Khung được tính lại mỗi lần forecast_months thay đổi (đổi kỳ dự
@@ -1119,17 +1150,17 @@ def build_climate_normal_chart(commune_name, df_r, df_t, forecast_months):
             x0, x1 = seg[0] - 0.5, seg[-1] + 0.5
             # Khung ngoài mờ tạo hiệu ứng "phát sáng" + khung trong nét đứt nổi bật
             shapes.append(dict(type="rect", xref="x", yref="paper", x0=x0, x1=x1, y0=0.0, y1=1.0,
-                                line=dict(width=0), fillcolor="rgba(229,57,53,0.07)", layer="below"))
+                                line=dict(width=0), fillcolor="rgba(244,81,30,0.07)", layer="below"))
             shapes.append(dict(type="rect", xref="x", yref="paper", x0=x0, x1=x1, y0=0.02, y1=0.98,
-                                line=dict(color="#e53935", width=2, dash="dash"), fillcolor="rgba(0,0,0,0)", layer="above"))
+                                line=dict(color="#f4511e", width=2, dash="dash"), fillcolor="rgba(0,0,0,0)", layer="above"))
             annotations.append(dict(x=(x0 + x1) / 2, y=1.0, yref="paper", yshift=14, showarrow=False,
-                                     text="Giai đoạn dự báo", font=dict(size=9.5, color="#e53935", family="Arial"), xanchor="center"))
+                                     text="Giai đoạn dự báo", font=dict(size=9.5, color="#f4511e", family="Arial"), xanchor="center"))
 
     fig.update_layout(
         title=dict(text="<b>Đặc trưng khí hậu trung bình nhiều năm (1981–2024)</b>", font=dict(size=13, family="Arial"), x=0.5, xanchor="center"),
         xaxis=dict(tickmode="array", tickvals=x_nums, ticktext=months_vn, tickfont=dict(size=11), showgrid=False, range=[0.3, 12.7]),
-        yaxis=dict(title=dict(text="Lượng mưa (mm)", font=dict(color="#1565c0", size=11)), tickfont=dict(color="#1565c0", size=10), range=[0, max(R_vals) * 1.25 if R_vals else 400], showgrid=True, gridcolor="rgba(180,180,180,0.3)"),
-        yaxis2=dict(title=dict(text="Nhiệt độ (°C)", font=dict(color="#e65100", size=11)), tickfont=dict(color="#e65100", size=10), overlaying="y", side="right", range=[min(T_vals) - 3, max(T_vals) + 5] if T_vals else [15, 40], showgrid=False),
+        yaxis=dict(title=dict(text="Lượng mưa (mm)", font=dict(color="#1D9BC9", size=11)), tickfont=dict(color="#1D9BC9", size=10), range=[0, max(R_vals) * 1.25 if R_vals else 400], showgrid=True, gridcolor="rgba(180,180,180,0.3)"),
+        yaxis2=dict(title=dict(text="Nhiệt độ (°C)", font=dict(color="#f4511e", size=11)), tickfont=dict(color="#f4511e", size=10), overlaying="y", side="right", range=[min(T_vals) - 3, max(T_vals) + 5] if T_vals else [15, 40], showgrid=False),
         legend=dict(x=0.02, y=-0.15, orientation="h", bgcolor="rgba(255,255,255,0.8)", font=dict(size=11)),
         height=280, margin=dict(l=50, r=60, t=45, b=50), plot_bgcolor="white", paper_bgcolor="white", bargap=0.2,
         shapes=shapes, annotations=annotations,
@@ -1144,9 +1175,9 @@ def render_xacsuat_table(xacsuat_data, month_labels):
         probs = xacsuat_data.get(lbl, {})
         t_vals = probs.get("T", (None, None, None)); r_vals = probs.get("R", (None, None, None))
         rows_T.extend([_fmt(v) for v in t_vals]); rows_R.extend([_fmt(v) for v in r_vals])
-    html = '<table style="border-collapse:collapse; width:100%; font-size:13px; font-family:Arial;"><thead><tr style="background:#073B4C; color:white; text-align:center;"><th rowspan="2" style="border:1px solid #aaa; padding:4px 8px; width:140px;">Tháng</th>'
+    html = '<table style="border-collapse:collapse; width:100%; font-size:13px; font-family:Arial;"><thead><tr style="background:#0B4C7A; color:white; text-align:center;"><th rowspan="2" style="border:1px solid #aaa; padding:4px 8px; width:140px;">Tháng</th>'
     for lbl in month_labels: html += f'<th colspan="3" style="border:1px solid #aaa; padding:4px 8px;">{lbl.replace("Tháng ","").split("/")[0]}</th>'
-    html += "</tr><tr style='background:#0F8B8D; color:white; text-align:center;'>"
+    html += "</tr><tr style='background:#17B6A6; color:white; text-align:center;'>"
     for _ in month_labels: html += '<th style="border:1px solid #aaa; padding:4px 6px;">Thấp hơn<br><small>(XSHC)</small></th><th style="border:1px solid #aaa; padding:4px 6px;">Xấp xỉ<br><small>(XSCC)</small></th><th style="border:1px solid #aaa; padding:4px 6px;">Cao hơn<br><small>(XSVC)</small></th>'
     html += "</tr></thead><tbody>"
     for row_data, var_label in [(rows_T, "Nhiệt độ TB nhiều năm (%)"), (rows_R, "Lượng mưa TB nhiều năm (%)")]:
@@ -1163,7 +1194,7 @@ def render_risk_table(crop_name, decades, decade_risks, growth_stages=None, dise
         t = {0: "—", 1: "Thấp", 2: "TB", 3: "Cao"}.get(r, "—")
         return f'<td style="border:1px solid #ccc; padding:3px 6px; text-align:center; background:{c}; font-weight:bold; font-size:12px;">{t}</td>'
 
-    head_style = "border:1px solid #ccc; padding:4px 6px; text-align:center; background:#073B4C; color:white; font-size:12px;"
+    head_style = "border:1px solid #ccc; padding:4px 6px; text-align:center; background:#0B4C7A; color:white; font-size:12px;"
     row_style = "border:1px solid #ccc; padding:3px 8px; font-size:12px; background:#f8f9fa;"
     
     html = f'<table style="border-collapse:collapse; width:100%; margin-bottom:12px;"><thead><tr><th style="{head_style} width:180px;">Giai đoạn</th>'
@@ -1260,7 +1291,7 @@ def _mpl_to_plotly(cmap_name, n=128):
 # của kichban.imh.ac.vn — do môi trường không gọi được basemap tile ngoài, ta mô phỏng
 # bằng cách đổi màu nền + màu viền cho phù hợp phong cách từng loại nền).
 MAP_BASEMAP_STYLES = {
-    "Mặc định":        {"bg": "#ffffff", "border": "#111111", "grid": "rgba(180,180,180,0.35)"},
+    "Mặc định":        {"bg": "#ffffff", "border": "#0B4C7A", "grid": "rgba(180,180,180,0.35)"},
     "Địa hình":        {"bg": "#f3ecd9", "border": "#5b4636", "grid": "rgba(120,100,70,0.30)"},
     "Vệ tinh (mô phỏng)": {"bg": "#0b2530", "border": "#ffffff", "grid": "rgba(255,255,255,0.20)"},
     "Đường phố (mô phỏng)": {"bg": "#eef1f3", "border": "#333333", "grid": "rgba(80,80,80,0.25)"},
@@ -1413,11 +1444,11 @@ def build_commune_map_figure(commune_name, gdf_xa_all):
         fig.add_trace(go.Scatter(x=all_x, y=all_y, mode="lines", line=dict(color="#cccccc", width=0.8), fill="toself", fillcolor="rgba(230,230,230,0.4)", hoverinfo="skip", showlegend=False))
     
     comm_x, comm_y = _geom_to_xy_list(gdf_commune)
-    fig.add_trace(go.Scatter(x=comm_x, y=comm_y, mode="lines", fill="toself", fillcolor="rgba(7,59,76,0.40)", line=dict(color="#073B4C", width=2.5), hoverinfo="skip", showlegend=False))
+    fig.add_trace(go.Scatter(x=comm_x, y=comm_y, mode="lines", fill="toself", fillcolor="rgba(29,155,201,0.35)", line=dict(color="#0B4C7A", width=2.5), hoverinfo="skip", showlegend=False))
 
     try:
         centroid = gdf_commune.geometry.unary_union.centroid
-        fig.add_trace(go.Scatter(x=[centroid.x], y=[centroid.y], mode="markers+text", text=[commune_name], textposition="top center", textfont=dict(size=11, color="#073B4C", family="Arial"), marker=dict(size=9, color="#e53935", symbol="circle"), hoverinfo="skip", showlegend=False))
+        fig.add_trace(go.Scatter(x=[centroid.x], y=[centroid.y], mode="markers+text", text=[commune_name], textposition="top center", textfont=dict(size=11, color="#0B4C7A", family="Arial"), marker=dict(size=9, color="#f4511e", symbol="circle"), hoverinfo="skip", showlegend=False))
     except Exception: pass
 
     try:
@@ -1548,30 +1579,30 @@ def build_full_bulletin_html(commune_name, crops, period, month_labels, df_r, df
 <style>
   html {{ -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }}
   * {{ box-sizing: border-box; }}
-  body {{ font-family: "Segoe UI", Arial, sans-serif; margin: 0; padding: 0; background: #f4f6f8; color: #222; }}
-  .page {{ max-width: 1100px; margin: 18px auto 60px auto; background: #fff; box-shadow: 0 2px 14px rgba(0,0,0,0.10); border-radius: 10px; overflow: hidden; }}
-  .doc-header {{ background: linear-gradient(135deg, #073B4C 0%, #0F8B8D 100%); color: #fff; padding: 22px 28px 18px 28px; }}
+  body {{ font-family: "Segoe UI", Arial, sans-serif; margin: 0; padding: 0; background: linear-gradient(180deg, #eef7fb 0%, #f5faf8 100%); color: #222; }}
+  .page {{ max-width: 1100px; margin: 18px auto 60px auto; background: #fff; box-shadow: 0 4px 22px rgba(11,76,122,0.14); border-radius: 14px; overflow: hidden; }}
+  .doc-header {{ background: linear-gradient(135deg, #1D9BC9 0%, #17B6A6 100%); color: #fff; padding: 22px 28px 18px 28px; }}
   .doc-header .org {{ font-size: 12.5px; opacity: 0.9; margin: 0 0 4px 0; display:flex; align-items:center; }}
   .doc-header h1 {{ margin: 4px 0 6px 0; font-size: 1.5rem; }}
   .doc-header .meta {{ font-size: 12.5px; opacity: 0.9; }}
   .toolbar {{ display: flex; justify-content: flex-end; gap: 10px; padding: 12px 28px; background: #eef3f6; border-bottom: 1px solid #dbe3e8; }}
-  .btn {{ border: none; border-radius: 6px; padding: 9px 18px; font-size: 13.5px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }}
-  .btn-print {{ background: #073B4C; color: #fff; }} .btn-print:hover {{ background: #052a37; }}
+  .btn {{ border: none; border-radius: 8px; padding: 9px 18px; font-size: 13.5px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }}
+  .btn-print {{ background: #0B4C7A; color: #fff; }} .btn-print:hover {{ background: #083a5f; }}
   .content {{ padding: 24px 28px 10px 28px; }}
   .info-row {{ display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 18px; }}
-  .info-card {{ flex: 1; min-width: 180px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; }}
+  .info-card {{ flex: 1; min-width: 180px; background: #f8fafc; border: 1px solid #e2f0f5; border-radius: 10px; padding: 10px 14px; }}
   .info-card .label {{ font-size: 11.5px; color: #667085; margin-bottom: 2px; }}
-  .info-card .value {{ font-size: 14.5px; font-weight: 700; color: #073B4C; }}
+  .info-card .value {{ font-size: 14.5px; font-weight: 700; color: #0B4C7A; }}
   .two-col {{ display: flex; gap: 18px; margin-bottom: 22px; flex-wrap: nowrap; align-items: flex-start; }}
   .col-map {{ flex: 0 0 260px; width: 260px; display: flex; flex-direction: column; }}
   .col-chart {{ flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; }}
-  .section-title {{ font-size: 1rem; font-weight: 700; color: #073B4C; margin: 0 0 8px 0; display: flex; align-items: center; gap: 6px; }}
-  .card {{ border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; background: #fcfdfe; }}
-  .card-chart {{ border: 1px solid #e2e8f0; border-radius: 8px; padding: 6px; background: #fcfdfe; height: 314px; overflow: hidden; display: flex; align-items: center; justify-content: center; }}
+  .section-title {{ font-size: 1rem; font-weight: 700; color: #0B4C7A; margin: 0 0 8px 0; display: flex; align-items: center; gap: 6px; }}
+  .card {{ border: 1px solid #e2f0f5; border-radius: 10px; padding: 12px; background: #fcfdfe; }}
+  .card-chart {{ border: 1px solid #e2f0f5; border-radius: 10px; padding: 6px; background: #fcfdfe; height: 314px; overflow: hidden; display: flex; align-items: center; justify-content: center; }}
   .card-chart > div {{ width: 100%; height: 100%; }}
-  hr.sep {{ border: none; border-top: 1px solid #e2e8f0; margin: 22px 0; }}
+  hr.sep {{ border: none; border-top: 1px solid #e2f0f5; margin: 22px 0; }}
   .risk-block {{ margin-bottom: 22px; }}
-  .risk-header-export {{ background: linear-gradient(135deg, #7b2d00 0%, #c0392b 100%); color: #fff; padding: 8px 16px; border-radius: 6px; font-size: 1rem; font-weight: 700; margin: 0 0 6px 0; }}
+  .risk-header-export {{ background: linear-gradient(135deg, #ff8a5c 0%, #f4511e 100%); color: #fff; padding: 9px 18px; border-radius: 10px; font-size: 1rem; font-weight: 700; margin: 0 0 6px 0; }}
   .legend-export {{ font-size: 11.5px; margin: -4px 0 4px 0; }}
   .legend-chip {{ padding: 2px 9px; margin-right: 6px; border-radius: 3px; }}
   table {{ font-family: inherit; }}
@@ -1780,7 +1811,7 @@ def page_trang_chu():
         # Khi có logo chính thức, chỉ cần dán URL vào biến INSTITUTE_LOGO_URL ở đầu file.
         logo_html = """<div class="org-logo-fallback">
             <svg viewBox="0 0 48 48" width="30" height="30" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="24" cy="24" r="24" fill="#073B4C"/>
+                <circle cx="24" cy="24" r="24" fill="#0B4C7A"/>
                 <circle cx="24" cy="15" r="5.5" fill="#FFD166"/>
                 <path d="M8 27c3-4 6-4 9 0s6 4 9 0 6-4 9 0" stroke="#ffffff" stroke-width="2.6" fill="none" stroke-linecap="round"/>
                 <path d="M8 34c3-4 6-4 9 0s6 4 9 0 6-4 9 0" stroke="#ffffff" stroke-width="2.2" fill="none" stroke-linecap="round" opacity="0.65"/>
@@ -1917,7 +1948,7 @@ def page_phan_hoi():
 with st.sidebar:
     st.markdown("## 🌾 Bản tin Khí hậu\n**Quảng Ninh – Nông nghiệp**\n---")
     menu = st.radio("📌 Chọn module:", ["🏠 Trang chủ", "🔄 Dự báo khí hậu mùa", "📋 Bản tin cảnh báo rủi ro khí hậu", "💾 Bản tin đã lưu", "📤 Export bản tin", "💬 Phản hồi"], label_visibility="collapsed")
-    st.markdown("---\nPhòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu\n - Viện Khoa học Khí tượng Thủy văn Môi trường và Biển\n---\n*Phiên bản 1.5.5 – 07/2026*")
+    st.markdown("---\nPhòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu\n - Viện Khoa học Khí tượng Thủy văn Môi trường và Biển\n---\n*Phiên bản 1.5.6 – 07/2026*")
 
 # v1.5.1 — Thanh menu ngang trên cùng, hiển thị phía trên nội dung mọi trang
 render_topnav_bar(menu)
