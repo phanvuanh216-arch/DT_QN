@@ -13,7 +13,7 @@ THAY ĐỔI v1.3.9 – MODULE TỔNG QUAN:
   [KEEP] Giữ nguyên toàn bộ code cấu trúc giao diện v1.3.4
 THAY ĐỔI v1.4.0 – GIAO DIỆN & MODULE GIỚI THIỆU:
   [NEW]  Đổi tên module "Tổng quan" → "Giới thiệu"
-  [NEW]  Bổ sung mục "II. Mục tiêu, nội dung..." / "13. Mục tiêu của nhiệm vụ"
+  [NEW]  BỔ sung mục "II. Mục tiêu, nội dung..." / "13. Mục tiêu của nhiệm vụ"
          vào module Giới thiệu
   [NEW]  Làm mới bảng màu giao diện (tông xanh biển đậm – phù hợp chủ đề
          khí hậu/biển Quảng Ninh), áp dụng đồng bộ cho cả bản tin export HTML
@@ -103,6 +103,8 @@ THAY ĐỔI v1.7.0 – MODULE PHẢN HỒI (LIÊN HỆ):
          của kichban.imh.ac.vn (2 cột: Thông tin liên hệ và Biểu mẫu góp ý)
   [NEW]  Thêm card thông tin chi tiết (địa chỉ, SĐT, email) của Viện KHKTTVMT&B
   [NEW]  Tạo biểu mẫu phản hồi trực quan (st.form) có tính năng kiểm tra lỗi (validation)
+THAY ĐỔI v1.7.1 – MODULE PHẢN HỒI (ĐỊNH DẠNG VĂN BẢN):
+  [FIX]  Thêm dấu ngắt dòng (<br>) cho đoạn văn bản ghi chú ý kiến đóng góp giúp giao diện cân đối, dễ nhìn
 """
 
 import streamlit as st
@@ -768,7 +770,7 @@ def build_boundary_traces_cached(_gdf_all_tinh, _gdf_tinh_qn, _gdf_xa):
             result["mask_wkt"] = _gdf_xa.unary_union.wkt
     return result
 
-@st.cache_data(ttl=86400, show_spinner=False)
+@st.cache_data(ttl=86400, show_gradient=False)
 def load_era5_data():
     try:
         r_r = requests.get(ERA5_R_URL, timeout=30)
@@ -1244,14 +1246,14 @@ def _mask_points_in_polygon(poly, xs_flat, ys_flat):
 @st.cache_data(show_spinner=False)
 def _compute_grid(lons_t, lats_t, vals_t, minx, miny, maxx, maxy, mask_wkt, GRID_N=300, SIGMA=1.0):
     xi, yi, zi = np.array(lons_t), np.array(lats_t), np.array(vals_t)
-    gx_vec, gy_vec = np.linspace(minx, maxx, GRID_N), np.linspace(miny, maxy, GRID_N)
-    gx, gy = np.meshgrid(gx_vec, gy_vec)
+    grid_x_vec, grid_y_vec = np.linspace(minx, maxx, GRID_N), np.linspace(miny, maxy, GRID_N)
+    gx, gy = np.meshgrid(grid_x_vec, grid_y_vec)
     gv = _idw_knn(xi, yi, zi, np.column_stack([gx.ravel(), gy.ravel()])).reshape(gx.shape)
     if SIGMA > 0: gv = gaussian_filter(gv, sigma=SIGMA)
     if mask_wkt:
         mask_flat = _mask_points_in_polygon(wkt_loads(mask_wkt), gx.ravel(), gy.ravel()).reshape(gx.shape)
         gv = np.where(mask_flat, gv, np.nan)
-    return gx_vec, gy_vec, gv
+    return grid_x_vec, grid_y_vec, gv
 
 @st.cache_data(show_spinner=False)
 def _mpl_to_plotly(cmap_name, n=128):
@@ -1877,11 +1879,12 @@ def page_phan_hoi():
             </div>
             <div class="contact-info-item">
                 <div class="icon">🌐</div>
-                <div><a href="https://imh.ac.vn/" target="_blank" style="color: #1D9BC9; text-decoration: none; font-weight: 600;">https://imh.ac.vn/</a><br>
+                <div><a href="https://imh.ac.vn/" target="_blank" style="color: #1D9BC9; text-decoration: none; font-weight: 600;">https://imh.ac.vn/</a></div>
             </div>
             <hr style="border:none; border-top: 1px dashed #cfe3ea; margin: 24px 0;">
             <div style="font-size: 0.86rem; color: #64748b; line-height: 1.5;">
-            <div>* Mọi ý kiến đóng góp về hệ thống bản tin rủi ro khí hậu nông nghiệp tỉnh Quảng Ninh xin vui lòng điền vào biểu mẫu bên cạnh. Đội ngũ phát triển sẽ tiếp nhận và phản hồi trong thời gian sớm nhất.</i></div>
+                <i>* Mọi ý kiến đóng góp về hệ thống bản tin rủi ro khí hậu nông nghiệp tỉnh Quảng Ninh xin vui lòng điền vào biểu mẫu bên cạnh.<br>Đội ngũ phát triển sẽ tiếp nhận và phản hồi trong thời gian sớm nhất.</i>
+            </div>
         </div>
         """, unsafe_allow_html=True)
         
@@ -1914,7 +1917,7 @@ def page_phan_hoi():
 with st.sidebar:
     st.markdown("## 🌾 Bản tin Khí hậu\n**Quảng Ninh – Nông nghiệp**\n---")
     menu = st.radio("📌 Chọn module:", ["🏠 Trang chủ", "🔄 Dự báo khí hậu mùa", "📋 Bản tin cảnh báo rủi ro khí hậu", "💾 Bản tin đã lưu", "📤 Export bản tin", "💬 Phản hồi"], label_visibility="collapsed")
-    st.markdown("---\nPhòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu\n - Viện Khoa học Khí tượng Thủy văn Môi trường và Biển\n---\n*Phiên bản 1.7.0 – 07/2026*")
+    st.markdown("---\nPhòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu\n - Viện Khoa học Khí tượng Thủy văn Môi trường và Biển\n---\n*Phiên bản 1.7.1 – 07/2026*")
 
 render_topnav_bar(menu)
 
