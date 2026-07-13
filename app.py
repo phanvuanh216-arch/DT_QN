@@ -1869,16 +1869,15 @@ def page_phan_hoi():
             </div>
             <div class="contact-info-item">
                 <div class="icon">📞</div>
-                <div>+84 24 - 37 731 410 / +84 24 - 37 756 613</div>
+                <div>+84327619210 (Trực kỹ thuật - Ông Lê Văn Phong)</div>
             </div>
             <div class="contact-info-item">
                 <div class="icon">📧</div>
-                <div>vt_vkttv_khdt@mae.gov.vn</div>
+                <div>ttnckhituongnongnghiep@gmail.com</div>
             </div>
             <div class="contact-info-item">
                 <div class="icon">🌐</div>
                 <div><a href="https://imh.ac.vn/" target="_blank" style="color: #1D9BC9; text-decoration: none; font-weight: 600;">https://imh.ac.vn/</a><br>
-                <a href="https://kichban.imh.ac.vn/" target="_blank" style="color: #1D9BC9; text-decoration: none; font-weight: 600;">https://kichban.imh.ac.vn/</a></div>
             </div>
             <hr style="border:none; border-top: 1px dashed #cfe3ea; margin: 24px 0;">
             <div style="font-size: 0.86rem; color: #64748b; line-height: 1.5;">
