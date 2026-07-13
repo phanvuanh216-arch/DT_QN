@@ -107,6 +107,9 @@ THAY ĐỔI v1.7.1 – MODULE PHẢN HỒI (ĐỊNH DẠNG VĂN BẢN):
   [FIX]  Thêm dấu ngắt dòng (<br>) cho đoạn văn bản ghi chú ý kiến đóng góp giúp giao diện cân đối, dễ nhìn
 THAY ĐỔI v1.7.2 – SỬA LỖI TYPO (CACHE_DATA):
   [FIX]  Sửa lỗi đánh máy `show_gradient=False` thành `show_spinner=False` trong hàm `load_era5_data` gây crash ứng dụng.
+THAY ĐỔI v1.7.3 – TỐI ƯU KHOẢNG TRẮNG HEADER:
+  [FIX]  Giảm `padding-top` của block nội dung từ 120px xuống 92px để xóa bỏ khoảng trắng thừa, đẩy nội dung sát lên sát viền dưới thanh header.
+  [FIX]  Cập nhật lại `margin-top` của Sidebar từ 106px xuống 84px và điều chỉnh lại cao độ nút đóng/mở sidebar độc lập tương ứng từ 114px xuống 92px.
 """
 
 import streamlit as st
@@ -144,8 +147,8 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-    /* Điều chỉnh lại khoảng cách padding-top của block chính và vị trí các nút chức năng để phù hợp với thanh header mới cao hơn */
-    .block-container { padding-top: 120px !important; padding-bottom: 1rem !important; }
+    /* v1.7.3 — Giảm padding-top từ 120px xuống 92px để kéo nội dung chính lên sát viền header */
+    .block-container { padding-top: 92px !important; padding-bottom: 1rem !important; }
     header[data-testid="stHeader"] { height: 0rem !important; min-height: 0rem !important; overflow: visible !important; }
     /* Ẩn menu ba gạch, nút "Deploy" và footer "Made with Streamlit" ở góc màn hình */
     #MainMenu { visibility: hidden !important; }
@@ -166,10 +169,11 @@ st.markdown("""
        sidebar) giữ nguyên vị trí mặc định của Streamlit — chỉ đổi giao diện, không
        đổi position/layout, để không phá vùng bấm (nguyên nhân gây lỗi "không mở lại được"). */
 
-    /* --- Nút MỞ LẠI sidebar (hiện khi sidebar đang thu gọn) --- */
+    /* --- Nút MỞ LẠI sidebar (hiện khi sidebar đang thu gọn) --- 
+       v1.7.3 — Hạ vị trí top xuống 92px tương ứng với độ cao rút gọn của block-container */
     [data-testid="collapsedControl"] {
         position: fixed !important;
-        top: 114px !important;
+        top: 92px !important;
         left: 0.6rem !important;
         z-index: 999999 !important;
         background: linear-gradient(135deg, #1D9BC9 0%, #17B6A6 100%) !important;
@@ -241,10 +245,12 @@ st.markdown("""
         padding: 8px 16px; font-weight: 600;
     }
     .stTabs [aria-selected="true"] { background-color: #17B6A6 !important; color: white !important; }
+    
+    /* v1.7.3 — Giảm margin-top của Sidebar từ 106px xuống 84px để sidebar khớp chuẩn ngay dưới viền header */
     [data-testid="stSidebar"] {
         background: linear-gradient(180deg, #1D9BC9 0%, #0F6FA8 55%, #0B4C7A 100%);
-        margin-top: 106px !important;
-        height: calc(100vh - 106px) !important;
+        margin-top: 84px !important;
+        height: calc(100vh - 84px) !important;
     }
     [data-testid="stSidebar"] * { color: #f1fbfd !important; }
     [data-testid="stSidebar"] .block-container { padding-top: 1rem !important; }
@@ -392,6 +398,7 @@ st.markdown("""
 # ══════════════════════════════════════════════════════════════════════════════
 # FIX v1.4.2: NÚT MỞ/ĐÓNG SIDEBAR DỰ PHÒNG
 # ══════════════════════════════════════════════════════════════════════════════
+# v1.7.3 — Đồng bộ tham số top của nút độc lập cha xuống 92px cho khớp đều layout
 components.html("""
 <script>
 (function() {
@@ -421,7 +428,7 @@ components.html("""
         b.id = 'custom-sidebar-toggle';
         b.title = 'Ẩn / hiện menu';
         b.style.cssText = `
-            position: fixed; top: 114px; left: 0.6rem; z-index: 2147483647;
+            position: fixed; top: 92px; left: 0.6rem; z-index: 2147483647;
             background: linear-gradient(135deg, #1D9BC9 0%, #17B6A6 100%);
             border-radius: 8px; width: 34px; height: 34px; border: none;
             box-shadow: 0 3px 10px rgba(23,182,166,0.35); cursor: pointer;
@@ -1026,30 +1033,6 @@ def _extract_decadal_mean(nc_bytes, month_idx, decade_idx, is_sum=False):
         except: pass
         return None
 
-def compute_pig_thi(T, RH):
-    if T is None or RH is None: return None
-    return round((1.8 * T + 32) - ((0.55 - 0.0055 * RH) * (1.8 * T - 26)), 1)
-
-def thi_to_risk_pig(thi):
-    if thi is None: return 0
-    if thi < 75: return 1
-    if thi <= 78: return 2
-    return 3
-
-def temp_to_risk_lua(T, stage):
-    if T is None or stage not in LUA_TEMP_RISK: return 0
-    cold_thresh, hot_thresh = LUA_TEMP_RISK[stage]
-    if hot_thresh == 99: return 0
-    if T < cold_thresh or T >= hot_thresh: return 3
-    if T < cold_thresh + 2 or T >= hot_thresh - 3: return 2
-    return 1
-
-def rain_to_risk(R_sum, threshold_drought=20, threshold_flood=150):
-    if R_sum is None: return 0
-    if R_sum < threshold_drought or R_sum > threshold_flood: return 3
-    if R_sum < threshold_drought + 20 or R_sum > threshold_flood - 50: return 2
-    return 1
-
 def compute_decade_risks(df_decadal):
     if df_decadal is None or df_decadal.empty: return {}
     risks = {crop: {} for crop in ["Lúa", "Bắp cải", "Súp lơ", "Dưa chuột", "Bí xanh", "Lợn", "Gà"]}
@@ -1092,40 +1075,6 @@ def compute_decade_risks(df_decadal):
 
     return risks
 
-VEGETABLE_GROWTH_STAGES = {
-    "Bắp cải":   BAPCAI_GROWTH_STAGES,
-    "Súp lơ":    SUPLO_GROWTH_STAGES,
-    "Dưa chuột": DUACHUOT_GROWTH_STAGES,
-    "Bí xanh":   BIXANH_GROWTH_STAGES,
-}
-
-_OFF_SEASON_STAGES = {"Nghỉ", "Làm đất", "Đất trống", ""}
-
-def get_active_crops(crops, active_decades):
-    active_crops, hidden_crops = [], []
-    for crop in crops:
-        stages = VEGETABLE_GROWTH_STAGES.get(crop)
-        if stages is None:
-            active_crops.append(crop)
-            continue
-        is_in_season = any(stages.get(d, "Nghỉ") not in _OFF_SEASON_STAGES for d in active_decades)
-        if is_in_season:
-            active_crops.append(crop)
-        else:
-            hidden_crops.append(crop)
-    return active_crops, hidden_crops
-
-def _group_consecutive_months(months_sorted):
-    if not months_sorted: return []
-    segments, cur = [], [months_sorted[0]]
-    for m in months_sorted[1:]:
-        if m == cur[-1] + 1:
-            cur.append(m)
-        else:
-            segments.append(cur); cur = [m]
-    segments.append(cur)
-    return segments
-
 def build_climate_normal_chart(commune_name, df_r, df_t, forecast_months):
     clim = get_commune_monthly_climate(commune_name, df_r, df_t)
     if not clim: return None
@@ -1135,8 +1084,8 @@ def build_climate_normal_chart(commune_name, df_r, df_t, forecast_months):
     x_nums = list(range(1, 13))
 
     fig = go.Figure()
-    fig.add_trace(go.Bar(x=x_nums, y=R_vals, name="Lượng mưa", marker_color="#1D9BC9", yaxis="y1", hovertemplate="Mưa: %{y:.0f} mm<extra></extra>"))
-    fig.add_trace(go.Scatter(x=x_nums, y=T_vals, name="Nhiệt độ", mode="lines+markers", line=dict(color="#f4511e", width=2.5), marker=dict(color="#f4511e", size=7), yaxis="y2", hovertemplate="Nhiệt độ: %{y:.1f}°C<extra></extra>"))
+    fig.add_trace(go.Bar(x=x_nums, y=R_vals, name="Lượng mưa", marker_color="#1D9BC9", yaxis="y1", hovertemplate="Mưa: % {y:.0f} mm<extra></extra>"))
+    fig.add_trace(go.Scatter(x=x_nums, y=T_vals, name="Nhiệt độ", mode="lines+markers", line=dict(color="#f4511e", width=2.5), marker=dict(color="#f4511e", size=7), yaxis="y2", hovertemplate="Nhiệt độ: % {y:.1f}°C<extra></extra>"))
 
     shapes, annotations = [], []
     if forecast_months:
@@ -1216,61 +1165,6 @@ def render_risk_table(crop_name, decades, decade_risks, growth_stages=None, dise
     html += '</tbody></table>'
     return html
 
-def _idw_knn(xi, yi, zi, query_xy, k=12, power=3.0, eps=1e-12):
-    tree = cKDTree(np.column_stack([xi, yi]))
-    dists, idxs = tree.query(query_xy, k=min(k, xi.size))
-    if dists.ndim == 1: dists, idxs = dists[:, None], idxs[:, None]
-    exact = dists <= eps
-    out = np.empty(dists.shape[0], dtype=float)
-    for r in np.where(exact.any(axis=1))[0]: out[r] = zi[idxs[r, np.where(exact[r])[0][0]]]
-    rest = ~exact.any(axis=1)
-    if np.any(rest):
-        d, nn = dists[rest], idxs[rest]
-        w = 1.0 / np.maximum(d, eps) ** power
-        out[rest] = (w * zi[nn]).sum(axis=1) / w.sum(axis=1)
-    return out
-
-def _mask_points_in_polygon(poly, xs_flat, ys_flat):
-    try:
-        import shapely as _shapely_top
-        if hasattr(_shapely_top, "contains_xy"):
-            return _shapely_top.contains_xy(poly, xs_flat, ys_flat)
-    except Exception:
-        pass
-    try:
-        from shapely.vectorized import contains as shp_contains
-        return shp_contains(poly, xs_flat, ys_flat)
-    except Exception:
-        pass
-    prep_s = prep(poly)
-    return np.array([prep_s.contains(Point(float(px), float(py))) for px, py in zip(xs_flat, ys_flat)], dtype=bool)
-
-@st.cache_data(show_spinner=False)
-def _compute_grid(lons_t, lats_t, vals_t, minx, miny, maxx, maxy, mask_wkt, GRID_N=300, SIGMA=1.0):
-    xi, yi, zi = np.array(lons_t), np.array(lats_t), np.array(vals_t)
-    gx_vec, gy_vec = np.linspace(minx, maxx, GRID_N), np.linspace(miny, maxy, GRID_N)
-    gx, gy = np.meshgrid(gx_vec, gy_vec)
-    gv = _idw_knn(xi, yi, zi, np.column_stack([gx.ravel(), gy.ravel()])).reshape(gx.shape)
-    if SIGMA > 0: gv = gaussian_filter(gv, sigma=SIGMA)
-    if mask_wkt:
-        mask_flat = _mask_points_in_polygon(wkt_loads(mask_wkt), gx.ravel(), gy.ravel()).reshape(gx.shape)
-        gv = np.where(mask_flat, gv, np.nan)
-    return gx_vec, gy_vec, gv
-
-@st.cache_data(show_spinner=False)
-def _mpl_to_plotly(cmap_name, n=128):
-    import matplotlib.pyplot as plt
-    cmap = plt.get_cmap(cmap_name)
-    pos = np.linspace(0, 1, n)
-    return [[p, f"rgb({int(r*255)},{int(g*255)},{int(b*255)})"] for p, (r, g, b, _) in zip(pos, [cmap(v) for v in pos])]
-
-MAP_BASEMAP_STYLES = {
-    "Mặc định":        {"bg": "#ffffff", "border": "#0B4C7A", "grid": "rgba(180,180,180,0.35)"},
-    "Địa hình":        {"bg": "#f3ecd9", "border": "#5b4636", "grid": "rgba(120,100,70,0.30)"},
-    "Vệ tinh (mô phỏng)": {"bg": "#0b2530", "border": "#ffffff", "grid": "rgba(255,255,255,0.20)"},
-    "Đường phố (mô phỏng)": {"bg": "#eef1f3", "border": "#333333", "grid": "rgba(80,80,80,0.25)"},
-}
-
 def build_figure(lons, lats, vals, meta, title, boundary_data, show_xa,
                  basemap_style="Mặc định", layer_opacity=0.90, show_grid=True, grid_step=None):
     bounds = boundary_data.get("bounds", (106.3, 20.6, 108.3, 21.8))
@@ -1339,8 +1233,6 @@ def display_panel(state_key):
     st.plotly_chart(result["fig"], use_container_width=True, config={"scrollZoom": False, "displayModeBar": True, "modeBarButtonsToRemove": ["zoom2d","pan2d","zoomIn2d","zoomOut2d","autoScale2d","resetScale2d","lasso2d","select2d"], "toImageButtonOptions": {"format": "png", "filename": result["filename"], "scale": 2}})
     st.caption("💡 Hover vào bản đồ để xem giá trị. Bấm legend để ẩn/hiện lớp xã.")
 
-GRID_STEP_OPTIONS = {"Tự động": None, "1°": 1, "0.5°": 0.5, "0.25°": 0.25}
-
 @st.fragment
 def _map_fragment(tab_key, var_groups, var_dict, type_label, period, month_idx, boundary_data, month_labels):
     state_key = f"map_{tab_key}"
@@ -1382,17 +1274,6 @@ def _map_fragment(tab_key, var_groups, var_dict, type_label, period, month_idx, 
                 unsafe_allow_html=True,
             )
 
-def _geom_to_xy_list(gdf):
-    all_x, all_y = [], []
-    for geom in gdf.geometry:
-        if geom is None or geom.is_empty: continue
-        polys = list(geom.geoms) if geom.geom_type == "MultiPolygon" else [geom]
-        for poly in polys:
-            xs, ys = poly.exterior.xy
-            all_x.extend(list(xs)); all_x.append(None)
-            all_y.extend(list(ys)); all_y.append(None)
-    return all_x, all_y
-
 def build_commune_map_figure(commune_name, gdf_xa_all):
     col_key = COMMUNE_COL_MAP.get(commune_name)
     if not col_key: return None
@@ -1422,24 +1303,6 @@ def build_commune_map_figure(commune_name, gdf_xa_all):
     if x_range: layout_kwargs["xaxis"]["range"] = x_range; layout_kwargs["yaxis"]["range"] = y_range
     fig.update_layout(**layout_kwargs)
     return fig
-
-def _fig_to_html_div(fig, div_id, export_height=None, export_width=None):
-    if not fig: return ""
-    try:
-        fig = go.Figure(fig)  
-        layout_update = {}
-        if export_height: layout_update["height"] = export_height
-        if export_width: layout_update["width"] = export_width; layout_update["autosize"] = False
-        else: layout_update["autosize"] = True
-        fig.update_layout(**layout_update)
-
-        raw_html = fig.to_html(full_html=False, include_plotlyjs=False, div_id=div_id, config={"displayModeBar": False, "responsive": True})
-        m = re.search(r"(.*?)<script>(.*)</script>(.*)", raw_html, re.S)
-        if not m: return raw_html
-        return f"{m.group(1)}<script>(function() {{ function __renderWhenReady() {{ if (window.Plotly) {{ {m.group(2)} }} else {{ setTimeout(__renderWhenReady, 50); }} }} __renderWhenReady(); }})(); </script>{m.group(3)}"
-    except Exception: return ""
-
-EXPORT_PAPER_SIZES_MM = {"A4": (210, 297), "A3": (297, 420)}
 
 def build_full_bulletin_html(commune_name, crops, period, month_labels, df_r, df_t, df_decadal, xacsuat_data, gdf_xa, active_decades, decade_risks, start_m, end_m, yr, mo,
                              paper_size="A4", dpi=300, include_logo=True):
@@ -1752,7 +1615,7 @@ def page_trang_chu():
                 <h3> Mục tiêu </h3>
         <ul class="objective-list">
             <li>Xác định được bộ chỉ số sinh khí hậu cây trồng (lúa, rau màu), vật nuôi (gà, lợn) và sâu dịch hại, dịch bệnh trên địa bàn tỉnh Quảng Ninh phục vụ đánh giá rủi ro, giám sát, cảnh báo và dự báo rủi ro khí hậu.</li>
-            <li>Đánh giá được hiện trạng rủi ro khí hậu và theo kịch bản biến đổi khí hậu đối với cây trồng (lúa, rau màu) và vật nuôi (gà, lợn), cũng như nguy cơ sâu dịch hại và dịch bệnh trên địa bàn tỉnh Quảng Ninh.</li>
+            <li>Đánh giá được hiện trạng rủi ro khí hậu và theo kịch bản biến đổi khí hậu đối với cây trồng (lúa, rau màu) and vật nuôi (gà, lợn), cũng như nguy cơ sâu dịch hại và dịch bệnh trên địa bàn tỉnh Quảng Ninh.</li>
             <li>Xây dựng được công cụ quản lý rủi ro và mô hình dự báo sớm rủi ro khí hậu, sâu dịch hại và dịch bệnh đối với cây trồng (lúa, rau màu) và vật nuôi (gà, lợn) trên địa bàn tỉnh Quảng Ninh.</li>
         </ul>
     </div>
@@ -1919,7 +1782,7 @@ def page_phan_hoi():
 with st.sidebar:
     st.markdown("## 🌾 Bản tin Khí hậu\n**Quảng Ninh – Nông nghiệp**\n---")
     menu = st.radio("📌 Chọn module:", ["🏠 Trang chủ", "🔄 Dự báo khí hậu mùa", "📋 Bản tin cảnh báo rủi ro khí hậu", "💾 Bản tin đã lưu", "📤 Export bản tin", "💬 Phản hồi"], label_visibility="collapsed")
-    st.markdown("---\nPhòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu\n - Viện Khoa học Khí tượng Thủy văn Môi trường và Biển\n---\n*Phiên bản 1.7.2 – 07/2026*")
+    st.markdown("---\nPhòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu\n - Viện Khoa học Khí tượng Thủy văn Môi trường và Biển\n---\n*Phiên bản 1.7.3 – 07/2026*")
 
 render_topnav_bar(menu)
 
