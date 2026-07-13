@@ -479,11 +479,11 @@ def render_fixed_top_header():
         <div class="fth-inner">
             <a class="fth-block" href="{INSTITUTE_WEBSITE_URL}" target="_blank" rel="noopener noreferrer">
                 <img src="{INSTITUTE_LOGO_URL}" alt="Logo Viện KHKTTV Môi trường và Biển">
-                <div class="fth-text">Viện Khoa học Khí tượng<br>Thủy văn Môi trường và Biển</div>
+                <div class="fth-text">Viện Khoa học Khí tượng Thủy văn Môi trường và Biển</div>
             </a>
             <a class="fth-block" href="{DOST_QUANGNINH_URL}" target="_blank" rel="noopener noreferrer">
                 <img src="{SO_KHCN_LOGO_URL}" alt="Logo Sở Khoa học và Công nghệ tỉnh Quảng Ninh">
-                <div class="fth-text">Sở Khoa học và Công nghệ<br>Tỉnh Quảng Ninh</div>
+                <div class="fth-text">Sở Khoa học và Công nghệ Tỉnh Quảng Ninh</div>
             </a>
         </div>
     </div>
