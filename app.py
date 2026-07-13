@@ -134,7 +134,7 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-    .block-container { padding-top: 0.5rem !important; padding-bottom: 1rem !important; }
+    .block-container { padding-top: 96px !important; padding-bottom: 1rem !important; }
     header[data-testid="stHeader"] { height: 0rem !important; min-height: 0rem !important; overflow: visible !important; }
     /* Ẩn menu ba gạch, nút "Deploy" và footer "Made with Streamlit" ở góc màn hình */
     #MainMenu { visibility: hidden !important; }
@@ -158,7 +158,7 @@ st.markdown("""
     /* --- Nút MỞ LẠI sidebar (hiện khi sidebar đang thu gọn) --- */
     [data-testid="collapsedControl"] {
         position: fixed !important;
-        top: 0.6rem !important;
+        top: 92px !important;
         left: 0.6rem !important;
         z-index: 999999 !important;
         background: linear-gradient(135deg, #1D9BC9 0%, #17B6A6 100%) !important;
@@ -230,7 +230,11 @@ st.markdown("""
         padding: 8px 16px; font-weight: 600;
     }
     .stTabs [aria-selected="true"] { background-color: #17B6A6 !important; color: white !important; }
-    [data-testid="stSidebar"] { background: linear-gradient(180deg, #1D9BC9 0%, #0F6FA8 55%, #0B4C7A 100%); }
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #1D9BC9 0%, #0F6FA8 55%, #0B4C7A 100%);
+        margin-top: 82px !important;
+        height: calc(100vh - 82px) !important;
+    }
     [data-testid="stSidebar"] * { color: #f1fbfd !important; }
     [data-testid="stSidebar"] .block-container { padding-top: 1rem !important; }
     .risk-0 { background-color: #f0f0f0 !important; color: #555 !important; }
@@ -339,6 +343,41 @@ st.markdown("""
         padding: 10px 14px; box-shadow: 0 3px 10px rgba(11,76,122,0.08);
     }
     table { box-shadow: 0 2px 10px rgba(11,76,122,0.06); border-radius: 8px; overflow: hidden; }
+
+    /* ══════════ v1.6.0 — THANH TIÊU ĐỀ CỐ ĐỊNH (ghim trên cùng ở MỌI module) ══════════
+       Gồm 2 logo (Viện KHKTTVMT&B bên trái – Sở KH&CN Quảng Ninh bên phải), luôn hiển
+       thị trên cùng bất kể đang ở module nào. Sidebar được "tụt xuống" (margin-top ở
+       trên) để nằm hẳn dưới thanh này, tránh bị đè/che mất nút đóng-mở sidebar. */
+    .fixed-top-header {
+        position: fixed; top: 0; left: 0; right: 0; z-index: 999997;
+        background: linear-gradient(120deg, #12213f 0%, #17294a 45%, #123a5e 100%);
+        padding: 11px 26px; box-shadow: 0 4px 16px rgba(0,0,0,0.28);
+        display: flex; align-items: center; justify-content: center;
+    }
+    .fth-inner {
+        display: flex; align-items: center; justify-content: center;
+        gap: 56px; flex-wrap: nowrap; max-width: 1100px; width: 100%;
+    }
+    .fth-block {
+        display: flex; align-items: center; gap: 14px;
+        text-decoration: none !important; flex: 1 1 0; min-width: 0;
+    }
+    .fth-block:nth-child(2) { flex-direction: row-reverse; text-align: right; }
+    .fth-block img {
+        height: 52px; width: 52px; object-fit: contain; border-radius: 50%;
+        background: #ffffff; padding: 4px; flex-shrink: 0;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    }
+    .fth-text {
+        color: #ffffff !important; font-weight: 800; font-size: 0.86rem;
+        line-height: 1.32; text-transform: uppercase; letter-spacing: 0.2px;
+    }
+    .fth-block:hover .fth-text { color: #ffe082 !important; text-decoration: underline; }
+    @media (max-width: 900px) {
+        .fth-inner { gap: 18px; }
+        .fth-text { font-size: 0.68rem; }
+        .fth-block img { height: 40px; width: 40px; }
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -385,7 +424,7 @@ components.html("""
         b.id = 'custom-sidebar-toggle';
         b.title = 'Ẩn / hiện menu';
         b.style.cssText = `
-            position: fixed; top: 0.6rem; left: 0.6rem; z-index: 2147483647;
+            position: fixed; top: 92px; left: 0.6rem; z-index: 2147483647;
             background: linear-gradient(135deg, #1D9BC9 0%, #17B6A6 100%);
             border-radius: 8px; width: 34px; height: 34px; border: none;
             box-shadow: 0 3px 10px rgba(23,182,166,0.35); cursor: pointer;
@@ -419,7 +458,38 @@ COMMUNE_LONLAT_URL = "https://raw.githubusercontent.com/phanvuanh216-arch/DT_QN/
 TONGQUAN_BG_URL    = "https://raw.githubusercontent.com/phanvuanh216-arch/DT_QN/main/anh_dep_quang_ninh_giao_dien_1.jpg"
 INSTITUTE_LOGO_URL = "https://raw.githubusercontent.com/phanvuanh216-arch/DT_QN/main/logo/logo_vien.jpg"
 INSTITUTE_NAME      = "Viện Khoa học Khí tượng Thủy văn Môi trường và Biển"
+INSTITUTE_WEBSITE_URL = "https://imh.ac.vn/"
 DOST_QUANGNINH_URL  = "https://www.quangninh.gov.vn/so/sokhoahoccongnghe/trang/default.aspx"
+# v1.6.0 — Logo Sở Khoa học và Công nghệ tỉnh Quảng Ninh (Quốc huy), dùng cho
+# thanh tiêu đề cố định (fixed top header) hiển thị trên mọi module.
+SO_KHCN_LOGO_URL    = "https://raw.githubusercontent.com/phanvuanh216-arch/DT_QN/main/logo/Quoc_Huy_Viet_Nam_Chuan.png"
+
+def render_fixed_top_header():
+    """
+    v1.6.0 — Thanh tiêu đề cố định (fixed), ghim trên cùng của TOÀN BỘ ứng dụng,
+    hiển thị ở mọi module (không chỉ riêng trang chủ). Gồm 2 logo:
+      • Bên trái : Logo Viện KHKTTV Môi trường và Biển -> liên kết https://imh.ac.vn/
+      • Bên phải : Logo Sở Khoa học và Công nghệ tỉnh Quảng Ninh -> liên kết Cổng TTĐT Sở
+    Được gọi 1 lần duy nhất ở cấp module (ngoài mọi hàm page_*) nên luôn render lại
+    trên mỗi lượt rerun/chuyển module. Sidebar và nội dung chính đã được đẩy xuống
+    (margin-top / padding-top ở phần CSS) để không bị thanh này che mất.
+    """
+    st.markdown(f"""
+    <div class="fixed-top-header">
+        <div class="fth-inner">
+            <a class="fth-block" href="{INSTITUTE_WEBSITE_URL}" target="_blank" rel="noopener noreferrer">
+                <img src="{INSTITUTE_LOGO_URL}" alt="Logo Viện KHKTTV Môi trường và Biển">
+                <div class="fth-text">Viện Khoa học Khí tượng<br>Thủy văn Môi trường và Biển</div>
+            </a>
+            <a class="fth-block" href="{DOST_QUANGNINH_URL}" target="_blank" rel="noopener noreferrer">
+                <img src="{SO_KHCN_LOGO_URL}" alt="Logo Sở Khoa học và Công nghệ tỉnh Quảng Ninh">
+                <div class="fth-text">Sở Khoa học và Công nghệ<br>Tỉnh Quảng Ninh</div>
+            </a>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+render_fixed_top_header()
 
 CLIMATE_VARS = {
     "ano.T2m":  {"label": "Nhiệt độ trung bình (T2m)", "unit": "°C",  "cmap": "RdBu_r", "levels": list(range(-5, 6))},
@@ -1372,7 +1442,7 @@ def display_panel(state_key):
 #   Thiết kế lại theo bố cục khoa học: 1 cột điều khiển cố định bên trái (chọn biến
 #   theo nhóm + tuỳ chọn hiển thị bản đồ), 1 vùng bản đồ lớn bên phải. Bỏ hẳn cách
 #   dùng st.tabs bọc 2 st.fragment độc lập (gây hiện tượng UI bị lặp/chồng nội dung
-#   khi Streamlit rerender fragment không đúng vị trí tab đang ẩn).
+#   khi Streamlit rerun fragment không đúng vị trí tab đang ẩn).
 # ══════════════════════════════════════════════════════════════════════════════
 
 GRID_STEP_OPTIONS = {"Tự động": None, "1°": 1, "0.5°": 0.5, "0.25°": 0.25}
@@ -1803,29 +1873,9 @@ def render_topnav_bar(active_menu):
 # ══════════════════════════════════════════════════════════════════════════════
 
 def page_trang_chu():
-    # ── Header: logo Viện + tên Viện liên kết tới Cổng TTĐT Sở KH&CN tỉnh Quảng Ninh ──
-    if INSTITUTE_LOGO_URL:
-        logo_html = f'<img src="{INSTITUTE_LOGO_URL}" alt="Logo Viện">'
-    else:
-        # Biểu trưng mặc định (sóng biển + mặt trời) khi chưa có logo thật của Viện.
-        # Khi có logo chính thức, chỉ cần dán URL vào biến INSTITUTE_LOGO_URL ở đầu file.
-        logo_html = """<div class="org-logo-fallback">
-            <svg viewBox="0 0 48 48" width="30" height="30" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="24" cy="24" r="24" fill="#0B4C7A"/>
-                <circle cx="24" cy="15" r="5.5" fill="#FFD166"/>
-                <path d="M8 27c3-4 6-4 9 0s6 4 9 0 6-4 9 0" stroke="#ffffff" stroke-width="2.6" fill="none" stroke-linecap="round"/>
-                <path d="M8 34c3-4 6-4 9 0s6 4 9 0 6-4 9 0" stroke="#ffffff" stroke-width="2.2" fill="none" stroke-linecap="round" opacity="0.65"/>
-            </svg>
-        </div>"""
-    st.markdown(f"""
-    <div class="org-header">
-        {logo_html}
-        <div class="org-text">
-            <a href="{DOST_QUANGNINH_URL}" target="_blank" rel="noopener noreferrer">{INSTITUTE_NAME}</a>
-            <div class="org-sub">Liên kết chuyên môn với Sở Khoa học và Công nghệ tỉnh Quảng Ninh</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    # ── Lưu ý: khối "logo Viện + tên Viện" trước đây đặt riêng ở Trang chủ đã được
+    # thay bằng THANH TIÊU ĐỀ CỐ ĐỊNH toàn cục (render_fixed_top_header, gọi 1 lần
+    # ở đầu file) — hiển thị đồng nhất trên mọi module, không chỉ riêng Trang chủ. ──
 
     # ── Banner ảnh nền Quảng Ninh ──
     st.markdown(f"""
