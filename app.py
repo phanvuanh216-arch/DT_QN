@@ -110,7 +110,9 @@ THAY ĐỔI v1.7.2 – SỬA LỖI TYPO (CACHE_DATA):
 THAY ĐỔI v1.7.3 – CẬP NHẬT MENU UI/UX:
   [NEW]  Bỏ mục "Trang chủ" và "Phản hồi" khỏi sidebar bên trái do đã được 
          hiển thị trên thanh điều hướng ngang (Topnav). 
-  [NEW]  Đồng bộ logic routing để kết hợp điều hướng từ Topnav và Sidebar.
+THAY ĐỔI v1.7.4 – SỬA LỖI ĐIỀU HƯỚNG TRANG CHỦ MẶC ĐỊNH:
+  [FIX]  Thiết lập "Trang chủ" làm trang mặc định khi mới vào web (không có tham số URL).
+  [NEW]  Đồng bộ highlight trạng thái menu: khi đang ở "Trang chủ" hoặc "Phản hồi", sidebar sẽ không có mục nào được chọn (index=None).
 """
 
 import streamlit as st
@@ -1921,35 +1923,50 @@ def page_phan_hoi():
 # SIDEBAR VÀ QUẢN LÝ ĐIỀU HƯỚNG
 # ══════════════════════════════════════════════════════════════════════════════
 
-# Hàm callback xóa URL query param khi người dùng bấm vào các mục trong Sidebar
+# Khởi tạo trạng thái trang hiện tại bằng session_state để ghi nhớ điều hướng
+if "current_view" not in st.session_state:
+    st.session_state.current_view = "🏠 Trang chủ"
+
+# Lấy tham số URL từ Topnav
+goto_param = st.query_params.get("goto", None)
+
+# Xử lý điều hướng khi bấm từ Topnav (tham số URL sẽ ghi đè session_state)
+if goto_param == "Trang chủ":
+    st.session_state.current_view = "🏠 Trang chủ"
+elif goto_param == "Phản hồi":
+    st.session_state.current_view = "💬 Phản hồi"
+
 def on_sidebar_click():
+    # Cập nhật view khi bấm vào Sidebar và xoá tham số URL của Topnav
+    st.session_state.current_view = st.session_state.sidebar_menu_key
     if "goto" in st.query_params:
         del st.query_params["goto"]
 
+# Xác định menu nào sẽ được highlight trên sidebar
+sidebar_options = ["🔄 Dự báo khí hậu mùa", "📋 Bản tin cảnh báo rủi ro khí hậu", "💾 Bản tin đã lưu", "📤 Export bản tin"]
+try:
+    sidebar_idx = sidebar_options.index(st.session_state.current_view)
+except ValueError:
+    # Nếu đang ở "Trang chủ" hoặc "Phản hồi", thì không highlight item nào trên sidebar
+    sidebar_idx = None 
+
 with st.sidebar:
     st.markdown("## 🌾 Bản tin Khí hậu\n**Quảng Ninh – Nông nghiệp**\n---")
-    # Đã bỏ "Trang chủ" và "Phản hồi"
     sidebar_menu = st.radio(
         "📌 Chọn module:", 
-        ["🔄 Dự báo khí hậu mùa", "📋 Bản tin cảnh báo rủi ro khí hậu", "💾 Bản tin đã lưu", "📤 Export bản tin"], 
+        sidebar_options,
+        index=sidebar_idx,
+        key="sidebar_menu_key",
         label_visibility="collapsed",
         on_change=on_sidebar_click
     )
-    st.markdown("---\nPhòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu\n - Viện Khoa học Khí tượng Thủy văn Môi trường và Biển\n---\n*Phiên bản 1.7.3 – 07/2026*")
+    st.markdown("---\nPhòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu\n - Viện Khoa học Khí tượng Thủy văn Môi trường và Biển\n---\n*Phiên bản 1.7.4 – 07/2026*")
 
-# Logic xác định mục đang hiển thị: Ưu tiên Topnav (nếu URL có query), nếu không thì dùng Sidebar
-goto_param = st.query_params.get("goto", None)
-if goto_param == "Trang chủ":
-    active_view = "🏠 Trang chủ"
-elif goto_param == "Phản hồi":
-    active_view = "💬 Phản hồi"
-else:
-    active_view = sidebar_menu
+active_view = st.session_state.current_view
 
-# Hiển thị Topnav (truyền mục đang active vào để đổi màu nút tương ứng)
+# Render module tương ứng
 render_topnav_bar(active_view)
 
-# Chuyển trang theo mục đang active
 if   active_view == "🏠 Trang chủ":                          page_trang_chu()
 elif active_view == "🔄 Dự báo khí hậu mùa":                page_du_bao()
 elif active_view == "📋 Bản tin cảnh báo rủi ro khí hậu":   page_ban_tin_xa()
