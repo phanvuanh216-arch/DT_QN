@@ -1748,7 +1748,7 @@ def page_trang_chu():
     <div class="hero-banner" style="background-image:url('{TONGQUAN_BG_URL}');">
         <div class="hero-content">
             <h1>🌾 Công cụ quản lý rủi ro khí hậu đối với cây trồng và vật nuôi tỉnh Quảng Ninh</h1>
-            <p>Hệ thống hỗ trợ tạo <b>bản tin cảnh báo khí hậu</b> cho các xã tại Quảng Ninh, bao gồm đánh giá rủi ro cho <b>Lúa, Bắp cải, Súp lơ, Dưa chuột, Bí xanh, Lợn, Gà</b> theo từng kỳ tháng.</p>
+            <p>Hệ thống hỗ trợ tạo <b>bản tin cảnh báo khí hậu</b> cho các xã tại Quảng Ninh, bao gồm đánh giá rủi ro cho <b>Lúa, Rau, Lợn, Gà</b> theo từng kỳ tháng.</p>
         </div>
     </div>
     """, unsafe_allow_html=True)
