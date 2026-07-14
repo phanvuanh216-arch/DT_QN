@@ -107,6 +107,10 @@ THAY ĐỔI v1.7.1 – MODULE PHẢN HỒI (ĐỊNH DẠNG VĂN BẢN):
   [FIX]  Thêm dấu ngắt dòng (<br>) cho đoạn văn bản ghi chú ý kiến đóng góp giúp giao diện cân đối, dễ nhìn
 THAY ĐỔI v1.7.2 – SỬA LỖI TYPO (CACHE_DATA):
   [FIX]  Sửa lỗi đánh máy `show_gradient=False` thành `show_spinner=False` trong hàm `load_era5_data` gây crash ứng dụng.
+THAY ĐỔI v1.7.3 – CẬP NHẬT MENU UI/UX:
+  [NEW]  Bỏ mục "Trang chủ" và "Phản hồi" khỏi sidebar bên trái do đã được 
+         hiển thị trên thanh điều hướng ngang (Topnav). 
+  [NEW]  Đồng bộ logic routing để kết hợp điều hướng từ Topnav và Sidebar.
 """
 
 import streamlit as st
@@ -1914,18 +1918,41 @@ def page_phan_hoi():
                         st.success("✅ Cảm ơn bạn! Thông tin phản hồi đã được ghi nhận và gửi thành công tới hệ thống.")
 
 # ══════════════════════════════════════════════════════════════════════════════
-# SIDEBAR
+# SIDEBAR VÀ QUẢN LÝ ĐIỀU HƯỚNG
 # ══════════════════════════════════════════════════════════════════════════════
+
+# Hàm callback xóa URL query param khi người dùng bấm vào các mục trong Sidebar
+def on_sidebar_click():
+    if "goto" in st.query_params:
+        del st.query_params["goto"]
+
 with st.sidebar:
     st.markdown("## 🌾 Bản tin Khí hậu\n**Quảng Ninh – Nông nghiệp**\n---")
-    menu = st.radio("📌 Chọn module:", ["🏠 Trang chủ", "🔄 Dự báo khí hậu mùa", "📋 Bản tin cảnh báo rủi ro khí hậu", "💾 Bản tin đã lưu", "📤 Export bản tin", "💬 Phản hồi"], label_visibility="collapsed")
-    st.markdown("---\nPhòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu\n - Viện Khoa học Khí tượng Thủy văn Môi trường và Biển\n---\n*Phiên bản 1.7.2 – 07/2026*")
+    # Đã bỏ "Trang chủ" và "Phản hồi"
+    sidebar_menu = st.radio(
+        "📌 Chọn module:", 
+        ["🔄 Dự báo khí hậu mùa", "📋 Bản tin cảnh báo rủi ro khí hậu", "💾 Bản tin đã lưu", "📤 Export bản tin"], 
+        label_visibility="collapsed",
+        on_change=on_sidebar_click
+    )
+    st.markdown("---\nPhòng Nghiên cứu Khí tượng nông nghiệp và Dịch vụ khí hậu\n - Viện Khoa học Khí tượng Thủy văn Môi trường và Biển\n---\n*Phiên bản 1.7.3 – 07/2026*")
 
-render_topnav_bar(menu)
+# Logic xác định mục đang hiển thị: Ưu tiên Topnav (nếu URL có query), nếu không thì dùng Sidebar
+goto_param = st.query_params.get("goto", None)
+if goto_param == "Trang chủ":
+    active_view = "🏠 Trang chủ"
+elif goto_param == "Phản hồi":
+    active_view = "💬 Phản hồi"
+else:
+    active_view = sidebar_menu
 
-if   menu == "🏠 Trang chủ":                          page_trang_chu()
-elif menu == "🔄 Dự báo khí hậu mùa":                page_du_bao()
-elif menu == "📋 Bản tin cảnh báo rủi ro khí hậu":   page_ban_tin_xa()
-elif menu == "💾 Bản tin đã lưu":                      page_ban_tin_da_luu()
-elif menu == "📤 Export bản tin":                      page_export()
-elif menu == "💬 Phản hồi":                            page_phan_hoi()
+# Hiển thị Topnav (truyền mục đang active vào để đổi màu nút tương ứng)
+render_topnav_bar(active_view)
+
+# Chuyển trang theo mục đang active
+if   active_view == "🏠 Trang chủ":                          page_trang_chu()
+elif active_view == "🔄 Dự báo khí hậu mùa":                page_du_bao()
+elif active_view == "📋 Bản tin cảnh báo rủi ro khí hậu":   page_ban_tin_xa()
+elif active_view == "💾 Bản tin đã lưu":                      page_ban_tin_da_luu()
+elif active_view == "📤 Export bản tin":                      page_export()
+elif active_view == "💬 Phản hồi":                            page_phan_hoi()
